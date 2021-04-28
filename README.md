@@ -1,4 +1,4 @@
-# compiler9000
+# Compiler 9000
 
 An formalized micro-compiler in Lean 4
 
