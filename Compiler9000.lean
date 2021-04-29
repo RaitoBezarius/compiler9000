@@ -6,13 +6,31 @@ inductive LambdaTerm where
 | lambda (body: LambdaTerm)
 
 -- Q1.2
-def allFreeVariablesBoundBy : Nat -> LambdaTerm -> Bool
-| (n: Nat), LambdaTerm.num (val := m) => m <= n
-| (n: Nat), LambdaTerm.app (fn := fn) (arg := arg) => allFreeVariablesBoundBy n fn && allFreeVariablesBoundBy n arg
-| (n: Nat), LambdaTerm.lambda (body := t) => allFreeVariablesBoundBy n t
+def allFreeVariablesBoundBy (n: Nat) (t: LambdaTerm): Prop :=
+  aux n t 0
+where
+  aux n t depth : Prop := match t with
+| LambdaTerm.num (val := m) => m <= n ∨ m <= depth
+| LambdaTerm.app (fn := fn) (arg := arg) => aux n fn depth ∧ aux n arg depth
+| LambdaTerm.lambda (body := fn) => aux n fn (depth + 1)
+theorem allFreeVariablesBoundBy.auxRec (t: LambdaTerm): ∀ n d: Nat, (allFreeVariablesBoundBy.aux n t d -> allFreeVariablesBoundBy.aux (Nat.succ n) t d) := sorry
 
-def isClosedTerm (t: LambdaTerm): Prop := sorry
-theorem isClosedTermOfFreeVariablesBoundness (n: Nat) (t: LambdaTerm) (h: allFreeVariablesBoundBy n t): isClosedTerm t := sorry
+macro "C[" n:term "](" t:term ")" : term => `(allFreeVariablesBoundBy $n $t)
+def isClosedTerm (t: LambdaTerm): Prop := C[0](t)
+
+theorem isClosedTerm.FVBoundness (t: LambdaTerm) (h: isClosedTerm t): ∀ n: Nat, C[n](t) := by
+intro n
+induction n with
+| zero => assumption
+| succ m ih => match t with
+    | LambdaTerm.num (val := p) => cases ih with
+      | inl h =>
+        apply Or.inl
+        apply Nat.leOfLt (Nat.lt_succ_of_le _)
+        assumption -- p ≤ m, therefore p ≤ m + 1.
+      | inr h => apply Or.inr; assumption -- p ≤ 0, therefore p ≤ 0.
+    | LambdaTerm.app (fn := fn) (arg := arg) => apply And.intro ; exact allFreeVariablesBoundBy.auxRec _ _ _ ih.1 ; exact allFreeVariablesBoundBy.auxRec _ _ _ ih.2
+    | LambdaTerm.lambda (body := fn) => admit -- λ ⋅ body
 
 -- Q1.3
 def substitute (t: LambdaTerm) (index: Nat) (expr: LambdaTerm): LambdaTerm := sorry
