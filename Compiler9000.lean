@@ -1,4 +1,5 @@
 import Lean
+open Classical
 
 inductive LambdaTerm where
 | var (val : Nat)
@@ -19,6 +20,29 @@ fun n d hn => by induction t generalizing d with
 | var m => admit -- todo kek
 | app fn arg h_fn h_arg => exact ⟨ h_fn _ hn.1, h_arg _ hn.2 ⟩
 | lambda body h_body => exact h_body _ hn
+
+theorem allFreeVariablesBoundBy.auxRec₂ {t: LambdaTerm}: ∀ {n d: Nat}, (allFreeVariablesBoundBy.aux (n + 1) t d <-> allFreeVariablesBoundBy.aux n t (d + 1)) :=
+by
+intro n d
+induction t generalizing d with
+| var v =>
+  simp [aux]
+  rw [Nat.add_assoc, Nat.add_comm 1 d]
+  exact Iff.rfl
+| app fn arg h_fn h_arg =>
+  simp [aux]
+  exact Iff.intro
+    (fun H => ⟨ h_fn.1 H.1, h_arg.1 H.2 ⟩)
+    (fun H => ⟨ h_fn.2 H.1, h_arg.2 H.2 ⟩)
+| lambda body h_body =>
+  simp [aux]
+  exact Iff.intro
+    (fun H => (@h_body (d + 1)).1 H)
+    (fun H => (@h_body (d + 1)).2 H)
+
+theorem allFreeVariablesBoundBy.lambda {t: LambdaTerm}: ∀ {n: Nat}, allFreeVariablesBoundBy n (LambdaTerm.lambda t) -> allFreeVariablesBoundBy (n + 1) t :=
+by intro n hn; exact allFreeVariablesBoundBy.auxRec₂.2 hn
+
 
 macro "C[" n:term "](" t:term ")" : term => `(allFreeVariablesBoundBy $n $t)
 def isClosedTerm (t: LambdaTerm): Prop := C[0](t)
@@ -42,14 +66,11 @@ where
 
 theorem Nat.neOfLt {n m: Nat} (h: n < m): n ≠ m := sorry
 
-theorem substitute.idOnClosed (depth: Nat) (t: LambdaTerm) (ht: C[depth](t)) (index: Nat) (expr: LambdaTerm) (hexpr: isClosedTerm expr): substitute.aux t index expr depth = t :=
-by induction t with
-  -- ht: m < depth (en fait m < depth + 0)
-  -- On a depth ≤ depth + index
-  -- On obtient m ≠ depth + index
-| var m => have p: index + depth ≠ m := sorry; admit
-| app fn arg h_fn h_arg => admit
-| lambda body h_body => admit
+theorem substitute.idOnClosed (depth: Nat) (t: LambdaTerm) (ht: C[depth](t)) (index: Nat) (expr: LambdaTerm) (hexpr: isClosedTerm expr): substitute.aux expr index t depth = t :=
+by induction t generalizing depth with
+| var m => have p: index + depth ≠ m := sorry; simp [aux, p];
+| app fn arg h_fn h_arg => simp [aux, h_fn depth (ht.1), h_arg depth (ht.2)]
+| lambda body h_body => simp [aux, h_body (depth + 1) (allFreeVariablesBoundBy.lambda ht)]
 
 -- Q1.4
 def batchSubstitute (t: LambdaTerm) (startIndex: Nat) (exprs: List LambdaTerm): LambdaTerm := sorry
