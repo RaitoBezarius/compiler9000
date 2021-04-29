@@ -83,3 +83,27 @@ def batchSubstitute (t: LambdaTerm) (startIndex: Nat) (exprs: List LambdaTerm): 
 -- case 0: t[] = t
 -- case 1: allFreeVariablesBoundBy i t → batchSubstitute t i [u] = t
 -- case 2: forall k ≥ 1, allFreeVariablesBoundBy i u_k, batchSubstitute t i [ u_0 … u_n] = substitute i u_0 (batchSubstitute t (i + 1) [ u_1 … u_n ])
+
+
+-- Part 2
+-- Q2.1
+inductive SmallStepBetaReduction: LambdaTerm -> LambdaTerm -> Prop :=
+| Eval : ∀ (u v: LambdaTerm), SmallStepBetaReduction (LambdaTerm.app (LambdaTerm.lambda u) v) (substitute t 0 u)
+| LeftContext : ∀ (u v t: LambdaTerm), SmallStepBetaReduction t u -> SmallStepBetaReduction (LambdaTerm.app t v) (LambdaTerm.app u v)
+| RightContext : ∀ (t u v : LambdaTerm), SmallStepBetaReduction t u -> SmallStepBetaReduction (LambdaTerm.app v t) (LambdaTerm.app v u)
+| LambdaContext : ∀ (t u : LambdaTerm), SmallStepBetaReduction t u -> SmallStepBetaReduction (LambdaTerm.lambda t) (LambdaTerm.lambda u)
+
+-- Q2.2
+inductive BetaReduction: LambdaTerm -> LambdaTerm -> Prop :=
+| rfl : ∀ (u: LambdaTerm), BetaReduction u u
+| trans : ∀ (t u v: LambdaTerm), SmallStepBetaReduction t u -> BetaReduction u v -> BetaReduction t v
+
+-- Q2.3
+theorem BetaReduction.subterms.reduceAux1 (t u v: LambdaTerm):
+  BetaReduction t u -> BetaReduction (LambdaTerm.app t v) (LambdaTerm.app u v) := sorry
+theorem BetaReduction.subterms.reduceAux2 (t u v: LambdaTerm):
+  BetaReduction t u -> BetaReduction (LambdaTerm.app v t) (LambdaTerm.app v u) := sorry
+theorem BetaReduction.subterms.reduceAux3 (t u: LambdaTerm):
+  BetaReduction t u -> BetaReduction (LambdaTerm.lambda t) (LambdaTerm.lambda u) := sorry
+
+-- Part 3
