@@ -1,6 +1,9 @@
 import Lean
 open Classical
 
+-- For Core / standard library?
+theorem Nat.neOfLt {n m: Nat} (h: n < m): n ≠ m := sorry
+
 inductive LambdaTerm where
 | var (val : Nat)
 | app (fn: LambdaTerm) (arg: LambdaTerm)
@@ -17,14 +20,12 @@ where
 
 theorem allFreeVariablesBoundBy.auxRec (t: LambdaTerm): ∀ n d: Nat, (allFreeVariablesBoundBy.aux n t d -> allFreeVariablesBoundBy.aux (n + 1) t d) :=
 fun n d hn => by induction t generalizing d with
-| var m => admit -- todo kek
+| var m => apply Nat.ltTrans hn (Nat.addLtAddRight (Nat.lt.base _) _)
 | app fn arg h_fn h_arg => exact ⟨ h_fn _ hn.1, h_arg _ hn.2 ⟩
 | lambda body h_body => exact h_body _ hn
 
 theorem allFreeVariablesBoundBy.auxRec₂ {t: LambdaTerm}: ∀ {n d: Nat}, (allFreeVariablesBoundBy.aux (n + 1) t d <-> allFreeVariablesBoundBy.aux n t (d + 1)) :=
-by
-intro n d
-induction t generalizing d with
+by intro n d; induction t generalizing d with
 | var v =>
   simp [aux]
   rw [Nat.add_assoc, Nat.add_comm 1 d]
@@ -63,8 +64,6 @@ where
   | LambdaTerm.var (val := m) => if i + depth = m then expr else t
   | LambdaTerm.app fn arg => LambdaTerm.app (aux i fn depth) (aux i arg depth)
   | LambdaTerm.lambda body => LambdaTerm.lambda (aux i body (depth + 1))
-
-theorem Nat.neOfLt {n m: Nat} (h: n < m): n ≠ m := sorry
 
 theorem substitute.idOnClosed (depth: Nat) (t: LambdaTerm) (ht: C[depth](t)) (index: Nat) (expr: LambdaTerm) (hexpr: isClosedTerm expr): substitute.aux expr index t depth = t :=
 by induction t generalizing depth with
