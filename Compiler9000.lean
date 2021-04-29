@@ -2,7 +2,13 @@ import Lean
 open Classical
 
 -- For Core / standard library?
-theorem Nat.neOfLt {n m: Nat} (h: n < m): n ≠ m := sorry
+theorem Nat.neOfLt {n m: Nat} (h: n < m): n ≠ m :=
+by
+intro heq
+rw heq at h
+exact Nat.ltIrrefl _ h
+theorem Nat.ltAddRight {n m k: Nat} (h: n < m): n < m + k := sorry
+theorem Nat.ltAddLeft {n m k: Nat} (h: n < m): n < k + m := sorry
 
 inductive LambdaTerm where
 | var (val : Nat)
@@ -67,7 +73,7 @@ where
 
 theorem substitute.idOnClosed (depth: Nat) (t: LambdaTerm) (ht: C[depth](t)) (index: Nat) (expr: LambdaTerm) (hexpr: isClosedTerm expr): substitute.aux expr index t depth = t :=
 by induction t generalizing depth with
-| var m => have p: index + depth ≠ m := sorry; simp [aux, p];
+| var m => simp [allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux] at ht; have p: index + depth ≠ m := (Nat.neOfLt $ Nat.ltAddLeft ht).symm; simp [aux, p];
 | app fn arg h_fn h_arg => simp [aux, h_fn depth (ht.1), h_arg depth (ht.2)]
 | lambda body h_body => simp [aux, h_body (depth + 1) (allFreeVariablesBoundBy.lambda ht)]
 
