@@ -33,17 +33,15 @@ fun n d hn => by induction t generalizing d with
 theorem allFreeVariablesBoundBy.auxRec₂ {t: LambdaTerm}: ∀ {n d: Nat}, (allFreeVariablesBoundBy.aux (n + 1) t d <-> allFreeVariablesBoundBy.aux n t (d + 1)) :=
 by intro n d; induction t generalizing d with
 | var v =>
-  simp [aux]
+  simp only [aux]
   rw [Nat.add_assoc, Nat.add_comm 1 d]
   exact Iff.rfl
 | app fn arg h_fn h_arg =>
-  simp [aux]
   exact Iff.intro
     (fun H => ⟨ h_fn.1 H.1, h_arg.1 H.2 ⟩)
     (fun H => ⟨ h_fn.2 H.1, h_arg.2 H.2 ⟩)
 | lambda body h_body =>
-  simp [aux]
-  exact Iff.intro
+   exact Iff.intro
     (fun H => (@h_body (d + 1)).1 H)
     (fun H => (@h_body (d + 1)).2 H)
 
@@ -107,3 +105,48 @@ theorem BetaReduction.subterms.reduceAux3 (t u: LambdaTerm):
   BetaReduction t u -> BetaReduction (LambdaTerm.lambda t) (LambdaTerm.lambda u) := sorry
 
 -- Part 3
+-- Q3.2
+inductive KrivineInstruction
+| Access (n: Nat)
+| Grab
+| Push (c: List KrivineInstruction)
+
+-- TODO(Ryan): maybe, merge these two definitions?
+inductive KrivineEnv
+| Item (instrs: List KrivineInstruction) (env: List KrivineEnv)
+
+inductive KrivineStack
+| Item (instrs: List KrivineInstruction) (env: List KrivineEnv)
+
+structure KrivineState where
+  code: List KrivineInstruction
+  env: List KrivineEnv
+  stack: List KrivineStack
+
+-- Q3.3
+def evalKrivineMachine (state: KrivineState): Option KrivineState :=
+match state.code, state.env, state.stack with
+| ((KrivineInstruction.Access 0) :: code), (KrivineEnv.Item instrs recEnv) :: env, stack => some $ KrivineState.mk instrs recEnv stack
+| ((KrivineInstruction.Access n) :: code), (KrivineEnv.Item instrs recEnv) :: env, stack => some $ KrivineState.mk (KrivineInstruction.Access (n - 1) :: code) env stack
+| (KrivineInstruction.Push c' :: code), env, stack => some $ KrivineState.mk code env ((KrivineStack.Item c' env) :: stack)
+| (Grab :: code), env, (KrivineStack.Item c₀ e₀ :: stack) => some $ KrivineState.mk code ((KrivineEnv.Item c₀ e₀) :: env) stack
+| _, _, _ => none
+
+-- Part 4
+-- Q4.1
+def compile_instr: LambdaTerm -> List KrivineInstruction
+| LambdaTerm.lambda t => KrivineInstruction.Grab :: compile_instr t
+| LambdaTerm.app t u => KrivineInstruction.Push (compile_instr u) :: compile_instr t
+| LambdaTerm.var n => [KrivineInstruction.Access n]
+
+def compile : LambdaTerm -> KrivineState :=
+fun t => KrivineState.mk (compile_instr t) [] []
+
+-- Part 5
+
+-- TODO(Ryan): wf recursion has not been implemented yet.
+-- def compile.inv: List KrivineInstruction -> LambdaTerm
+-- | [] => LambdaTerm.var 0
+-- | KrivineInstruction.Access n :: _ => LambdaTerm.var n
+-- | KrivineInstruction.Push c' :: c => LambdaTerm.app (inv c) (inv c')
+-- | KrivineInstruction.Grab :: c => LambdaTerm.lambda (inv c)
