@@ -148,15 +148,16 @@ fun t => KrivineState.mk (compile_instr t) [] []
 def compile.inv_rel: List KrivineInstruction -> List KrivineInstruction -> Prop := sorry
 def compile.inv_wf (x: List KrivineInstruction): Acc inv_rel x := sorry
 
-partial def compile.inv: List KrivineInstruction -> LambdaTerm
+-- For extraction purpose.
+partial def compile.invUnsafe: List KrivineInstruction -> LambdaTerm
 | [] => LambdaTerm.var 0
 | KrivineInstruction.Access n :: _ => LambdaTerm.var n
 | KrivineInstruction.Push c' :: c => LambdaTerm.app (inv c) (inv c')
 | KrivineInstruction.Grab :: c => LambdaTerm.lambda (inv c)
 
 set_option codegen false in
-@[implementedBy compile.inv]
-def compile.inv.spec (c: List KrivineInstruction): LambdaTerm :=
+@[implementedBy compile.invUnsafe]
+def compile.inv (c: List KrivineInstruction): LambdaTerm :=
 WellFounded.fixF (fun code inv => match code with
   | [] => LambdaTerm.var 0
   | KrivineInstruction.Access n :: _ => LambdaTerm.var n
