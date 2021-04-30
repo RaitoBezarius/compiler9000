@@ -14,6 +14,7 @@ inductive LambdaTerm where
 | var (val : Nat)
 | app (fn: LambdaTerm) (arg: LambdaTerm)
 | lambda (body: LambdaTerm)
+deriving Inhabited
 
 -- Q1.2
 def allFreeVariablesBoundBy (n: Nat) (t: LambdaTerm): Prop :=
@@ -144,9 +145,21 @@ fun t => KrivineState.mk (compile_instr t) [] []
 
 -- Part 5
 
--- TODO(Ryan): wf recursion has not been implemented yet.
--- def compile.inv: List KrivineInstruction -> LambdaTerm
--- | [] => LambdaTerm.var 0
--- | KrivineInstruction.Access n :: _ => LambdaTerm.var n
--- | KrivineInstruction.Push c' :: c => LambdaTerm.app (inv c) (inv c')
--- | KrivineInstruction.Grab :: c => LambdaTerm.lambda (inv c)
+def compile.inv_rel: List KrivineInstruction -> List KrivineInstruction -> Prop := sorry
+def compile.inv_wf (x: List KrivineInstruction): Acc inv_rel x := sorry
+
+partial def compile.inv: List KrivineInstruction -> LambdaTerm
+| [] => LambdaTerm.var 0
+| KrivineInstruction.Access n :: _ => LambdaTerm.var n
+| KrivineInstruction.Push c' :: c => LambdaTerm.app (inv c) (inv c')
+| KrivineInstruction.Grab :: c => LambdaTerm.lambda (inv c)
+
+set_option codegen false in
+@[implementedBy compile.inv]
+def compile.inv.spec (c: List KrivineInstruction): LambdaTerm :=
+WellFounded.fixF (fun code inv => match code with
+  | [] => LambdaTerm.var 0
+  | KrivineInstruction.Access n :: _ => LambdaTerm.var n
+  | KrivineInstruction.Push c' :: c => LambdaTerm.app (inv c (sorry)) (inv c' (sorry))
+  | KrivineInstruction.Grab :: c => LambdaTerm.lambda (inv c (sorry))
+) c (inv_wf c)
