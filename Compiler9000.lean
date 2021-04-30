@@ -152,8 +152,8 @@ def compile.inv_wf (x: List KrivineInstruction): Acc inv_rel x := sorry
 partial def compile.invUnsafe: List KrivineInstruction -> LambdaTerm
 | [] => LambdaTerm.var 0
 | KrivineInstruction.Access n :: _ => LambdaTerm.var n
-| KrivineInstruction.Push c' :: c => LambdaTerm.app (inv c) (inv c')
-| KrivineInstruction.Grab :: c => LambdaTerm.lambda (inv c)
+| KrivineInstruction.Push c' :: c => LambdaTerm.app (invUnsafe c) (invUnsafe c')
+| KrivineInstruction.Grab :: c => LambdaTerm.lambda (invUnsafe c)
 
 set_option codegen false in
 @[implementedBy compile.invUnsafe]
