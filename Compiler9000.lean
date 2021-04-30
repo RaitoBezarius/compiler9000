@@ -138,25 +138,26 @@ inductive KrivineInstruction
 | Grab (next: KrivineInstruction)
 | Push (next: KrivineInstruction) (continuation: KrivineInstruction)
 
--- TODO(Ryan): maybe, merge these two definitions?
-inductive KrivineEnv
-| Item (code: KrivineInstruction) (env: List KrivineEnv)
+inductive KrivineClosure
+| pair (i: KrivineInstruction) (e: List KrivineClosure)
 
-inductive KrivineStack
-| Item (code: KrivineInstruction) (env: List KrivineEnv)
+def KrivineEnv := List KrivineClosure
+def KrivineStack := List KrivineClosure
+
+-- TODO(Ryan): maybe, merge these two definitions?
 
 structure KrivineState where
   code: KrivineInstruction
-  env: List KrivineEnv
-  stack: List KrivineStack
+  env: KrivineEnv
+  stack: KrivineStack
 
 -- Q3.3
 def evalKrivineMachine (state: KrivineState): Option KrivineState :=
 match state.code, state.env, state.stack with
-| KrivineInstruction.Access 0, (KrivineEnv.Item instrs recEnv) :: env, stack => some $ KrivineState.mk instrs recEnv stack
-| KrivineInstruction.Access n, (KrivineEnv.Item instrs recEnv) :: env, stack => some $ KrivineState.mk (KrivineInstruction.Access (n - 1)) env stack
-| KrivineInstruction.Push c' c, env, stack => some $ KrivineState.mk c env ((KrivineStack.Item c' env) :: stack)
-| KrivineInstruction.Grab code, env, (KrivineStack.Item c₀ e₀ :: stack) => some $ KrivineState.mk code ((KrivineEnv.Item c₀ e₀) :: env) stack
+| KrivineInstruction.Access 0, (KrivineClosure.pair code recEnv :: closures), stack => some $ KrivineState.mk code recEnv stack
+| KrivineInstruction.Access n, (KrivineClosure.pair code recEnv :: closures), stack => some $ KrivineState.mk (KrivineInstruction.Access (n - 1)) closures stack
+| KrivineInstruction.Push c' c, env, stack => some $ KrivineState.mk c env (KrivineClosure.pair c' env :: stack)
+| KrivineInstruction.Grab code, closures, (KrivineClosure.pair c₀ e₀ :: stack) => some $ KrivineState.mk code (KrivineClosure.pair c₀ e₀ :: closures) stack
 | _, _, _ => none
 
 -- Part 4
@@ -171,24 +172,60 @@ fun t => KrivineState.mk (compile_instr t) [] []
 
 -- Part 5
 
+-- Q5.1
 def compile.leftInv: KrivineInstruction -> LambdaTerm
 | KrivineInstruction.Access n => LambdaTerm.var n
 | KrivineInstruction.Push c' c => LambdaTerm.app (leftInv c) (leftInv c')
 | KrivineInstruction.Grab c => LambdaTerm.lambda (leftInv c)
 
--- Q4.2
+-- Q5.2
 def compile.idOfLeftInv (t: LambdaTerm): compile.leftInv (compile_instr t) = t :=
 by induction t with
 | var n => rfl
 | app fn arg h_fn h_arg => simp [compile.leftInv, h_fn, h_arg]
 | lambda t ht => simp [compile.leftInv, ht]
 
+
+def KrivineEnv.inv_rel: List KrivineEnv -> List KrivineEnv -> Prop := sorry
+def KrivineEnv.inv_wf (x: List KrivineEnv): Acc inv_rel x := sorry
+
+def KrivineEnv.correct: KrivineEnv -> Prop
+| [] => true
+| KrivineClosure.pair c₀ e₀ :: closures => C[List.length e₀](compile.leftInv c₀) ∧ (correct e₀) ∧ (correct closures)
+
 set_option codegen false in
-@[implementedBy compile.invUnsafe]
-def compile.inv (c: List KrivineInstruction): LambdaTerm :=
-WellFounded.fixF (fun code inv => match code with
-  | [] => LambdaTerm.var 0
-  | KrivineInstruction.Access n :: _ => LambdaTerm.var n
-  | KrivineInstruction.Push c' :: c => LambdaTerm.app (inv c (sorry)) (inv c' (sorry))
-  | KrivineInstruction.Grab :: c => LambdaTerm.lambda (inv c (sorry))
-) c (inv_wf c)
+@[implementedBy KrivineEnv.correctUnsafe]
+def KrivineEnv.correct (lenv: List KrivineEnv): Prop :=
+WellFounded.fixF (fun e correct => match e with
+  | [] => true
+  | KrivineEnv.Item c₀ e₀ :: env => C[List.length e₀](compile.left_inv c₀) ∧ (correct e₀ (sorry)) ∧ (correct env (sorry))
+) lenv (inv_wf lenv)
+
+
+def KrivineStack.correct: List KrivineStack -> Prop
+| [] => true
+| KrivineStack.Item c₀ e₀ :: stack => C[List.length stack](compile.left_inv c₀) && (KrivineEnv.correctUnsafe e₀) && (correct stack)
+
+def KrivineState.correct (state: KrivineState): Prop :=
+C[List.length state.env](compile.left_inv state.code) ∧ (KrivineEnv.correct state.env) ∧ (KrivineStack.correct state.stack)
+
+
+def compile.inv.env: List KrivineEnv -> List LambdaTerm
+| [] => []
+| (KrivineEnv.Item code recEnv) :: e => (left_inv code) :: env e
+
+-- compose closures
+--def compile.tau: KrivineState -> LambdaTerm
+--| c, e, s => LambdaTerm.app (batchSubstitute (inv c) 0 (inv.env e)) (tau )
+
+-- Q5.3
+theorem transitionCorrectness (state₀: KrivineState) (state₁: KrivineState)
+  (hTransition: evalKrivineMachine state₀ = state₁): KrivineState.correct state₀ -> KrivineState.correct state₁ := sorry
+
+-- Q5.4
+-- require the good definition of tau.
+-- theorem simulationCorrectness (state₀: KrivineState) (state₁: KrivineState):
+-- (evalKrivineMachine state₀ = state₁) -> KrivineState.correct state₀ -> SmallStepBetaReduction (compile.left_inv state₀) (compile.left_inv state₁) := sorry
+
+-- Q5.5
+-- theorem 
