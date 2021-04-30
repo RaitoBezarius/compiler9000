@@ -135,51 +135,53 @@ fun h_red => by induction h_red with
 -- Q3.2
 inductive KrivineInstruction
 | Access (n: Nat)
-| Grab
-| Push (c: List KrivineInstruction)
+| Grab (next: KrivineInstruction)
+| Push (next: KrivineInstruction) (continuation: KrivineInstruction)
 
 -- TODO(Ryan): maybe, merge these two definitions?
 inductive KrivineEnv
-| Item (instrs: List KrivineInstruction) (env: List KrivineEnv)
+| Item (code: KrivineInstruction) (env: List KrivineEnv)
 
 inductive KrivineStack
-| Item (instrs: List KrivineInstruction) (env: List KrivineEnv)
+| Item (code: KrivineInstruction) (env: List KrivineEnv)
 
 structure KrivineState where
-  code: List KrivineInstruction
+  code: KrivineInstruction
   env: List KrivineEnv
   stack: List KrivineStack
 
 -- Q3.3
 def evalKrivineMachine (state: KrivineState): Option KrivineState :=
 match state.code, state.env, state.stack with
-| ((KrivineInstruction.Access 0) :: code), (KrivineEnv.Item instrs recEnv) :: env, stack => some $ KrivineState.mk instrs recEnv stack
-| ((KrivineInstruction.Access n) :: code), (KrivineEnv.Item instrs recEnv) :: env, stack => some $ KrivineState.mk (KrivineInstruction.Access (n - 1) :: code) env stack
-| (KrivineInstruction.Push c' :: code), env, stack => some $ KrivineState.mk code env ((KrivineStack.Item c' env) :: stack)
-| (Grab :: code), env, (KrivineStack.Item c₀ e₀ :: stack) => some $ KrivineState.mk code ((KrivineEnv.Item c₀ e₀) :: env) stack
+| KrivineInstruction.Access 0, (KrivineEnv.Item instrs recEnv) :: env, stack => some $ KrivineState.mk instrs recEnv stack
+| KrivineInstruction.Access n, (KrivineEnv.Item instrs recEnv) :: env, stack => some $ KrivineState.mk (KrivineInstruction.Access (n - 1)) env stack
+| KrivineInstruction.Push c' c, env, stack => some $ KrivineState.mk c env ((KrivineStack.Item c' env) :: stack)
+| KrivineInstruction.Grab code, env, (KrivineStack.Item c₀ e₀ :: stack) => some $ KrivineState.mk code ((KrivineEnv.Item c₀ e₀) :: env) stack
 | _, _, _ => none
 
 -- Part 4
 -- Q4.1
-def compile_instr: LambdaTerm -> List KrivineInstruction
-| LambdaTerm.lambda t => KrivineInstruction.Grab :: compile_instr t
-| LambdaTerm.app t u => KrivineInstruction.Push (compile_instr u) :: compile_instr t
-| LambdaTerm.var n => [KrivineInstruction.Access n]
+def compile_instr: LambdaTerm -> KrivineInstruction
+| LambdaTerm.lambda t => KrivineInstruction.Grab (compile_instr t)
+| LambdaTerm.app t u => KrivineInstruction.Push (compile_instr u) (compile_instr t)
+| LambdaTerm.var n => KrivineInstruction.Access n
 
 def compile : LambdaTerm -> KrivineState :=
 fun t => KrivineState.mk (compile_instr t) [] []
 
 -- Part 5
 
-def compile.inv_rel: List KrivineInstruction -> List KrivineInstruction -> Prop := sorry
-def compile.inv_wf (x: List KrivineInstruction): Acc inv_rel x := sorry
+def compile.leftInv: KrivineInstruction -> LambdaTerm
+| KrivineInstruction.Access n => LambdaTerm.var n
+| KrivineInstruction.Push c' c => LambdaTerm.app (leftInv c) (leftInv c')
+| KrivineInstruction.Grab c => LambdaTerm.lambda (leftInv c)
 
--- For extraction purpose.
-partial def compile.invUnsafe: List KrivineInstruction -> LambdaTerm
-| [] => LambdaTerm.var 0
-| KrivineInstruction.Access n :: _ => LambdaTerm.var n
-| KrivineInstruction.Push c' :: c => LambdaTerm.app (invUnsafe c) (invUnsafe c')
-| KrivineInstruction.Grab :: c => LambdaTerm.lambda (invUnsafe c)
+-- Q4.2
+def compile.idOfLeftInv (t: LambdaTerm): compile.leftInv (compile_instr t) = t :=
+by induction t with
+| var n => rfl
+| app fn arg h_fn h_arg => simp [compile.leftInv, h_fn, h_arg]
+| lambda t ht => simp [compile.leftInv, ht]
 
 set_option codegen false in
 @[implementedBy compile.invUnsafe]
