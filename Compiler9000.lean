@@ -94,16 +94,42 @@ inductive SmallStepBetaReduction: LambdaTerm -> LambdaTerm -> Prop :=
 
 -- Q2.2
 inductive BetaReduction: LambdaTerm -> LambdaTerm -> Prop :=
-| rfl : ∀ (u: LambdaTerm), BetaReduction u u
-| trans : ∀ (t u v: LambdaTerm), SmallStepBetaReduction t u -> BetaReduction u v -> BetaReduction t v
+| Rfl (u: LambdaTerm): BetaReduction u u
+| Trans (t u v: LambdaTerm): SmallStepBetaReduction t u -> BetaReduction u v -> BetaReduction t v
 
 -- Q2.3
 theorem BetaReduction.subterms.reduceAux1 (t u v: LambdaTerm):
-  BetaReduction t u -> BetaReduction (LambdaTerm.app t v) (LambdaTerm.app u v) := sorry
+  BetaReduction t u -> BetaReduction (LambdaTerm.app t v) (LambdaTerm.app u v) :=
+fun h_red => by induction h_red with
+| Rfl => exact BetaReduction.Rfl _
+| Trans w x y h_smallstep h_step₁ h_step₂ =>
+  -- TODO(Ryan): golf me.
+  apply BetaReduction.Trans (LambdaTerm.app w v) (LambdaTerm.app x v)
+  apply SmallStepBetaReduction.LeftContext
+  assumption
+  assumption
+
+
 theorem BetaReduction.subterms.reduceAux2 (t u v: LambdaTerm):
-  BetaReduction t u -> BetaReduction (LambdaTerm.app v t) (LambdaTerm.app v u) := sorry
+  BetaReduction t u -> BetaReduction (LambdaTerm.app v t) (LambdaTerm.app v u) :=
+fun h_red => by induction h_red with
+| Rfl => exact BetaReduction.Rfl _
+| Trans w x y h_smallstep h_step₁ h_step₂ =>
+  -- TODO(Ryan): golf me.
+  apply BetaReduction.Trans (LambdaTerm.app v w) (LambdaTerm.app v x)
+  apply SmallStepBetaReduction.RightContext
+  assumption
+  assumption
+
 theorem BetaReduction.subterms.reduceAux3 (t u: LambdaTerm):
-  BetaReduction t u -> BetaReduction (LambdaTerm.lambda t) (LambdaTerm.lambda u) := sorry
+  BetaReduction t u -> BetaReduction (LambdaTerm.lambda t) (LambdaTerm.lambda u) := 
+fun h_red => by induction h_red with
+| Rfl => exact BetaReduction.Rfl _
+| Trans w x y h_smallstep h_step₁ h_step₂ =>
+  -- TODO(Ryan): golf me.
+  apply BetaReduction.Trans (LambdaTerm.lambda w) (LambdaTerm.lambda x)
+  apply SmallStepBetaReduction.LambdaContext
+  assumption; assumption
 
 -- Part 3
 -- Q3.2
