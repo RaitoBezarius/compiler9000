@@ -41,15 +41,16 @@
         "temci": "temci"
       },
       "locked": {
-        "lastModified": 1619604553,
-        "narHash": "sha256-0MIZHipl1WEGPyi2YZGmsRlJ17GDmrYOcBS3xstVQVs=",
-        "owner": "leanprover",
+        "lastModified": 1620036364,
+        "narHash": "sha256-Iu3BaBD3yaZF/GQvU4nXNJF2NyDXEbxFDjrn8bdKj1U=",
+        "owner": "RaitoBezarius",
         "repo": "lean4",
-        "rev": "40b17bc364dd6ddf8108d0c2bc2143593eda088e",
+        "rev": "1086b190566eee8da5d536d6cb9f9137d2fbad80",
         "type": "github"
       },
       "original": {
-        "owner": "leanprover",
+        "owner": "RaitoBezarius",
+        "ref": "lean-vscode-override",
         "repo": "lean4",
         "type": "github"
       }
@@ -170,7 +171,10 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "lean": "lean"
+        "lean": "lean",
+        "nixpkgs": [
+          "lean"
+        ]
       }
     },
     "temci": {
