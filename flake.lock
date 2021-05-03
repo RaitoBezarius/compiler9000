@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "flake-compat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1606424373,
+        "narHash": "sha256-oq8d4//CJOrVj+EcOaSXvMebvuTkmBJuT5tzlfewUnQ=",
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "rev": "99f1c2157fba4bfe6211a321fd0ee43199025dbf",
+        "type": "github"
+      },
+      "original": {
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "locked": {
         "lastModified": 1619345332,
@@ -32,6 +48,7 @@
     },
     "lean": {
       "inputs": {
+        "flake-compat": "flake-compat",
         "flake-utils": "flake-utils_2",
         "lean-stage0": "lean-stage0",
         "mdBook": "mdBook",
@@ -41,11 +58,11 @@
         "temci": "temci"
       },
       "locked": {
-        "lastModified": 1620036364,
-        "narHash": "sha256-Iu3BaBD3yaZF/GQvU4nXNJF2NyDXEbxFDjrn8bdKj1U=",
+        "lastModified": 1620040097,
+        "narHash": "sha256-yJFjqnT82CLgnSJZENgbqdwsuJAg7ELhEvk8NnYEBjw=",
         "owner": "RaitoBezarius",
         "repo": "lean4",
-        "rev": "1086b190566eee8da5d536d6cb9f9137d2fbad80",
+        "rev": "5e11f7b0a4a20ac8e9e2977c5a71c6571cec7f98",
         "type": "github"
       },
       "original": {
@@ -173,6 +190,9 @@
         "flake-utils": "flake-utils",
         "lean": "lean",
         "nixpkgs": [
+          "lean"
+        ],
+        "nixpkgs-vscode": [
           "lean"
         ]
       }
