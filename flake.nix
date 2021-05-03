@@ -14,11 +14,11 @@
         };
         leanPkgs = lean.packages.${system};
         pkg = with pkgs;
-          leanPkgs.buildLeanPackage.override {
-            lean-vscode = vscode-with-extensions.override {
-              vscodeExtensions = with vscode-extensions; [ vscodevim.vim ];
-            };
-          } {
+          leanPkgs.buildLeanPackage.override (old1: {
+            lean-vscode = old1.lean-vscode.override (old2: {
+              vscodeExtensions = with vscode-extensions; [ vscodevim.vim ] ++ old2.vscodeExtensions;
+            });
+          }) {
             name =
               "Compiler9000"; # must match the name of the top-level .lean file
             src = ./.;
