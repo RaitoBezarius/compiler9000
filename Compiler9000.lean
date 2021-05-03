@@ -189,6 +189,14 @@ by induction t with
 def KrivineEnv.inv_rel: List KrivineEnv -> List KrivineEnv -> Prop := sorry
 def KrivineEnv.inv_wf (x: List KrivineEnv): Acc inv_rel x := sorry
 
+def List.max: List Nat → Nat
+| [] => 0
+| x :: q => Nat.max x (max q)
+
+-- TODO: make sense of this.
+/-def KrivineClosure.depth: KrivineClosure -> Nat
+| KrivineClosure.pair _ e => 1 + List.max (List.map depth e)
+
 def KrivineEnv.correct: KrivineEnv -> Prop
 | [] => true
 | KrivineClosure.pair c₀ e₀ :: closures => C[List.length e₀](compile.leftInv c₀) ∧ (correct e₀) ∧ (correct closures)
@@ -213,14 +221,14 @@ C[List.length state.env](compile.left_inv state.code) ∧ (KrivineEnv.correct st
 def compile.inv.env: List KrivineEnv -> List LambdaTerm
 | [] => []
 | (KrivineEnv.Item code recEnv) :: e => (left_inv code) :: env e
-
+-/
 -- compose closures
 --def compile.tau: KrivineState -> LambdaTerm
 --| c, e, s => LambdaTerm.app (batchSubstitute (inv c) 0 (inv.env e)) (tau )
 
 -- Q5.3
-theorem transitionCorrectness (state₀: KrivineState) (state₁: KrivineState)
-  (hTransition: evalKrivineMachine state₀ = state₁): KrivineState.correct state₀ -> KrivineState.correct state₁ := sorry
+--theorem transitionCorrectness (state₀: KrivineState) (state₁: KrivineState)
+--  (hTransition: evalKrivineMachine state₀ = state₁): KrivineState.correct state₀ -> KrivineState.correct state₁ := sorry
 
 -- Q5.4
 -- require the good definition of tau.
