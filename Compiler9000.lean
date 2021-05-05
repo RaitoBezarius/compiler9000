@@ -7,8 +7,13 @@ by
 intro heq
 rw heq at h
 exact Nat.ltIrrefl _ h
-theorem Nat.ltAddRight {n m k: Nat} (h: n < m): n < m + k := sorry
-theorem Nat.ltAddLeft {n m k: Nat} (h: n < m): n < k + m := sorry
+
+theorem Nat.ltAddLeft {n m k: Nat} (h: n < m): n < k + m :=
+by induction k with
+    | zero => exact show n < 0 + m from (Nat.zero_add m).symm ▸ h
+    | succ k h => exact succ_add k m ▸ leStep h
+theorem Nat.ltAddRight {n m k: Nat} (h: n < m): n < m + k :=
+  Nat.add_comm k m ▸ Nat.ltAddLeft h
 
 inductive LambdaTerm where
 | var (val : Nat)
@@ -53,6 +58,20 @@ by intro n hn; exact allFreeVariablesBoundBy.auxRec₂.2 hn
 macro "C[" n:term "](" t:term ")" : term => `(allFreeVariablesBoundBy $n $t)
 def isClosedTerm (t: LambdaTerm): Prop := C[0](t)
 
+theorem boundedByFollowing (m : Nat) (h : C[n](t)) : C[n + m](t) :=
+by induction m with
+| zero => assumption
+| succ m ih => match t with
+    | LambdaTerm.var (val := p) => exact allFreeVariablesBoundBy.auxRec _ _ _ ih
+    | LambdaTerm.app (fn := fn) (arg := arg) => exact ⟨ allFreeVariablesBoundBy.auxRec _ _ _ ih.1, allFreeVariablesBoundBy.auxRec _ _ _ ih.2 ⟩
+    | LambdaTerm.lambda (body := fn) => exact allFreeVariablesBoundBy.auxRec _ _ _ ih
+
+theorem boundByGreater (greater : n ≤ m) (h : C[n](t)) : C[m](t) :=
+by match Nat.le.dest greater with
+| ⟨ w, hw ⟩ =>
+  rw ← hw
+  exact boundedByFollowing w h
+
 theorem isClosedTerm.FVBoundness (t: LambdaTerm) (h: isClosedTerm t): ∀ n: Nat, C[n](t) :=
 fun n => by induction n with
 | zero => assumption
@@ -77,12 +96,129 @@ by induction t generalizing depth with
 | lambda body h_body => simp [aux, h_body (depth + 1) (allFreeVariablesBoundBy.lambda ht)]
 
 -- Q1.4
-def batchSubstitute (t: LambdaTerm) (startIndex: Nat) (exprs: List LambdaTerm): LambdaTerm := sorry
--- theorem isClosedTerm.batchSubstitution (t: )
--- case 0: t[] = t
--- case 1: allFreeVariablesBoundBy i t → batchSubstitute t i [u] = t
--- case 2: forall k ≥ 1, allFreeVariablesBoundBy i u_k, batchSubstitute t i [ u_0 … u_n] = substitute i u_0 (batchSubstitute t (i + 1) [ u_1 … u_n ])
+def batchSubstitute (t : LambdaTerm) (index: Nat) (exprs : List LambdaTerm) : LambdaTerm :=
+  aux t 0
+where
+  find (l : List (Nat × LambdaTerm)) depth m : LambdaTerm :=
+    match l with
+      | [] => LambdaTerm.var m
+      | (i, expr) :: tail => if i + depth = m then expr else find tail depth m
+  aux t depth : LambdaTerm := match t with
+    | LambdaTerm.var (val := m) => find (List.enumFrom index exprs) depth m
+    | LambdaTerm.app fn arg => LambdaTerm.app (aux fn depth) (aux arg depth)
+    | LambdaTerm.lambda body => LambdaTerm.lambda (aux body (depth + 1))
 
+macro t:term "[" i:term "←" l:term "]" : term => `(batchSubstitute $t $i $l)
+
+theorem batchSubstituteFindSwap (index depth : Nat) (exprs : List LambdaTerm) :
+  batchSubstitute.find (List.enumFrom index exprs) (depth + 1) m =
+  batchSubstitute.find (List.enumFrom (index + 1) exprs) depth m :=
+by induction exprs generalizing index with
+  | nil => simp [batchSubstitute.find]
+  | cons e t h =>
+    have this : index + 1 + depth = index + (depth + 1) :=
+    by rw [Nat.add_assoc, Nat.add_comm 1 depth]
+    simp [batchSubstitute.find, this, h (index + 1)]
+
+theorem batchSubstituteSwap (t : LambdaTerm) (l : List LambdaTerm) (i : Nat) (depth : Nat) :
+  batchSubstitute.aux i l t (depth + 1) = batchSubstitute.aux (i + 1) l t depth :=
+by induction t generalizing depth with
+  | var m =>
+    simp [batchSubstitute.aux, batchSubstituteFindSwap]
+  | app fn arg h_fn h_arg => simp [batchSubstitute.aux, h_fn, h_arg]
+  | lambda body h_body => simp [batchSubstitute.aux, h_body]
+
+theorem substEmpty (t : LambdaTerm) {i : Nat} (depth : Nat) :
+  t[i ← []] = t :=
+by induction t generalizing i with
+| var m => simp [batchSubstitute, batchSubstitute.aux, batchSubstitute.find]
+| app fn arg h_fn h_arg =>
+  simp only [batchSubstitute] at h_fn
+  simp only [batchSubstitute] at h_arg
+  simp [batchSubstitute, batchSubstitute.aux, h_fn, h_arg]
+| lambda body h_body =>
+  simp only [batchSubstitute] at h_body
+  simp only [batchSubstitute, batchSubstitute.aux]
+  rw [batchSubstituteSwap body [] i 0, h_body]
+
+theorem substMinorized (h : C[i](t)) (l : List LambdaTerm) : t[i ← l] = t :=
+by induction t generalizing i with
+| var m =>
+  simp [batchSubstitute, batchSubstitute.aux]
+  suffices p : ∀ j, i ≤ j → batchSubstitute.find (List.enumFrom j l) 0 m = LambdaTerm.var m
+  from p i (Nat.leRefl i)
+  induction l with
+  | nil =>
+    intro j h'
+    simp [batchSubstitute.find]
+  | cons hd tl tl_h =>
+    intro j h'
+    simp [batchSubstitute.find]
+    have p : j ≠ m := Nat.ltOfLtOfLe h h' |> Nat.neOfLt |> Ne.symm
+    simp [p, tl_h (j + 1) (Nat.leStep h')]
+| app fn arg h_fn h_arg =>
+  simp only [batchSubstitute] at h_fn
+  simp only [batchSubstitute] at h_arg
+  simp [batchSubstitute, batchSubstitute.aux, h_fn h.1, h_arg h.2]
+| lambda body h_body =>
+  have p := h_body (allFreeVariablesBoundBy.auxRec₂.2 h)
+  simp only [batchSubstitute] at p
+  rw ← batchSubstituteSwap body l i 0 at p
+  simp [batchSubstitute, batchSubstitute.aux, p]
+
+theorem batchSubstituteAuxCons {depth : Nat} (hd : LambdaTerm) (tl : List LambdaTerm) :
+  batchSubstitute.aux i (hd :: tl) t depth =
+  batchSubstitute.aux i [hd] (batchSubstitute.aux (i + 1) tl t depth) depth :=
+by
+  simp [batchSubstitute.aux]
+  admit
+
+#print Decidable.casesOn
+
+structure BoundedTerm (i : Nat) where
+  t : LambdaTerm
+  p : C[i](t)
+theorem substRotate (t : LambdaTerm) {i : Nat} (hd : BoundedTerm i) (tl : List (BoundedTerm i)) :
+  t[i ← hd.t :: List.map (λ x => x.t) tl] =
+  t[(i + 1) ← List.map (λ x => x.t) tl][i ← [hd.t]] :=
+by
+  suffices p : ∀ j : Nat, i ≤ j →
+    t[j ← hd.t :: List.map (λ x => x.t) tl] =
+    t[(j + 1) ← List.map (λ x => x.t) tl][j ← [hd.t]]
+  by exact p i (Nat.leRefl i)
+  induction t with
+  | var m =>
+    -- intro j h
+    simp only [batchSubstitute, batchSubstitute.aux, batchSubstitute.find]
+    induction tl with
+    | nil =>
+      intro j h
+      simp [batchSubstitute.aux, batchSubstitute.find]
+    | cons hd' tl tl_h =>
+      intro j h
+      simp only [batchSubstitute.find, batchSubstitute.aux]
+      admit
+    /-cases em (j = m) with
+    | inl h' =>
+      /-have p₀ : C[i](LambdaTerm.var m) := sorry
+      have p₁ : C[j + 1](LambdaTerm.var m) := boundByGreater (Nat.leTrans h $ Nat.leSucc j) p₀
+      have p₂ := substMinorized' p₁ (List.map (λ x => x.t) tl)
+      simp only [batchSubstitute, batchSubstitute.aux] at p₂
+      rw p₂
+      simp [batchSubstitute.aux, batchSubstitute.find]-/
+    | inr h' =>
+      simp [h']
+      admit-/
+  | app fn arg h_fn h_arg =>
+    intro j h
+    simp [batchSubstitute] at h_fn
+    simp [batchSubstitute] at h_arg
+    simp [batchSubstitute, batchSubstitute.aux, h_fn j h, h_arg j h]
+  | lambda body h_body =>
+    intro j h
+    simp only [batchSubstitute] at h_body
+    simp only [batchSubstitute, batchSubstitute.aux, batchSubstituteSwap]
+    rw h_body (j + 1) (Nat.leTrans h $ Nat.leSucc j)
 
 -- Part 2
 -- Q2.1
