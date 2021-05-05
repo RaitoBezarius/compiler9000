@@ -4,8 +4,8 @@ open Classical
 -- For Core / standard library?
 theorem Nat.neOfLt {n m: Nat} (h: n < m): n ≠ m :=
 by
-intro heq
-rw heq at h
+intro heq;
+rw [heq] at h
 exact Nat.ltIrrefl _ h
 
 theorem Nat.ltAddLeft {n m k: Nat} (h: n < m): n < k + m :=
@@ -73,7 +73,7 @@ by induction m with
 theorem boundByGreater (greater : n ≤ m) (h : C[n](t)) : C[m](t) :=
 by match Nat.le.dest greater with
 | ⟨ w, hw ⟩ =>
-  rw ← hw
+  rw [← hw]
   exact boundedByFollowing w h
 
 theorem isClosedTerm.FVBoundness (t: LambdaTerm) (h: isClosedTerm t): ∀ n: Nat, C[n](t) :=
@@ -167,7 +167,7 @@ by induction t generalizing i with
 | lambda body h_body =>
   have p := h_body (allFreeVariablesBoundBy.auxRec₂.2 h)
   simp only [batchSubstitute] at p
-  rw ← batchSubstituteSwap body l i 0 at p
+  rw [← batchSubstituteSwap body l i 0] at p
   simp [batchSubstitute, batchSubstitute.aux, p]
 
 theorem batchSubstituteFindLower (h : m < i) :
@@ -236,7 +236,7 @@ by
     intro j h
     simp only [batchSubstitute] at h_body
     simp only [batchSubstitute, batchSubstitute.aux, batchSubstituteSwap]
-    rw h_body (j + 1) (Nat.leTrans h $ Nat.leSucc j)
+    rw [h_body (j + 1) (Nat.leTrans h $ Nat.leSucc j)]
 
 -- Part 2
 -- Q2.1
@@ -305,14 +305,23 @@ structure KrivineState where
   env: KrivineEnv
   stack: KrivineEnv
 
+instance : Inhabited KrivineState where
+  default := { code := KrivineInstruction.Access 0, env := [], stack := [] }
+
 -- Q3.3
+@[reducible]
 def evalKrivineMachine (state: KrivineState): Option KrivineState :=
 match state.code, state.env, state.stack with
-| KrivineInstruction.Access 0, (KrivineClosure.pair code recEnv :: closures), stack => some $ KrivineState.mk code recEnv stack
-| KrivineInstruction.Access n, (KrivineClosure.pair code recEnv :: closures), stack => some $ KrivineState.mk (KrivineInstruction.Access (n - 1)) closures stack
-| KrivineInstruction.Push c' c, env, stack => some $ KrivineState.mk c env (KrivineClosure.pair c' env :: stack)
-| KrivineInstruction.Grab code, closures, (KrivineClosure.pair c₀ e₀ :: stack) => some $ KrivineState.mk code (KrivineClosure.pair c₀ e₀ :: closures) stack
-| _, _, _ => none
+| KrivineInstruction.Access 0, (KrivineClosure.pair code recEnv :: closures), stack =>
+  some $ KrivineState.mk code recEnv stack
+| KrivineInstruction.Access n, (KrivineClosure.pair code recEnv :: closures), stack =>
+  some $ KrivineState.mk (KrivineInstruction.Access (n - 1)) closures stack
+| KrivineInstruction.Push c' c, env, stack =>
+  some $ KrivineState.mk c env (KrivineClosure.pair c' env :: stack)
+| KrivineInstruction.Grab code, closures, (KrivineClosure.pair c₀ e₀ :: stack) =>
+  some $ KrivineState.mk code (KrivineClosure.pair c₀ e₀ :: closures) stack
+| _, _, _ =>
+  none
 
 -- Part 4
 -- Q4.1
@@ -386,7 +395,7 @@ theorem depth_spec₁: ∀ (c: KrivineInstruction) (x: KrivineEnv) (q: KrivineEn
   measure depth q (KrivineClosure.pair c x :: q) :=
 fun c x q => by
   simp only [measure, InvImage, depth]
-  rw ← Nat.succMaxEqMaxSucc
+  rw [← Nat.succMaxEqMaxSucc]
   exact Nat.ltSuccMaxRight
 
 theorem depth_spec₂: ∀ (c: KrivineInstruction) (x: KrivineEnv) (q: KrivineEnv),
@@ -406,8 +415,8 @@ match e with
   | KrivineClosure.pair c₀ e₀ :: env =>
     have e = KrivineClosure.pair c₀ e₀ :: env := by admit
     C[List.length e₀](compile.leftInv c₀)
-    ∧ (correct e₀ (by rw this; exact depth_spec₂ _ _ _))
-    ∧ (correct env (by rw this; exact depth_spec₁ _ _ _))
+    ∧ (correct e₀ (by rw [this]; exact depth_spec₂ _ _ _))
+    ∧ (correct env (by rw [this]; exact depth_spec₁ _ _ _))
 )
 end KrivineEnv
 
@@ -417,9 +426,36 @@ def KrivineState.correct (state: KrivineState): Prop :=
   ∧ (KrivineEnv.correct state.stack)
 
 -- Q5.3
-theorem transitionCorrectness (state₀: KrivineState) (state₁: KrivineState)
-  (hTransition: evalKrivineMachine state₀ = state₁): KrivineState.correct state₀ -> KrivineState.correct state₁ :=
-by match state₀.code, state₀.env, state₀.stack with
+theorem evalKrivineMachine.correctStateSpec (state: KrivineState) (hcorrect: KrivineState.correct state): (evalKrivineMachine state).isSome := sorry
+@[reducible]
+theorem evalKrivineMachine.getCorrectState (state: KrivineState) (hcorrect: KrivineState.correct state): KrivineState := (evalKrivineMachine state).get!
+
+theorem correctness.code.aux₁ (code: KrivineInstruction) (env: KrivineEnv)
+  (tail: KrivineEnv)
+  (h: KrivineEnv.correct (KrivineClosure.pair code env :: tail)): C[List.length env](compile.leftInv code) := sorry
+
+theorem correctness.code.aux₂ (n: Nat):
+  C[n](compile.leftInv $ KrivineInstruction.Access n) -> C[n](compile.leftInv $ KrivineInstruction.Access (n - 1)) := sorry
+
+theorem correctness.env.aux₁ (code: KrivineInstruction) (env: KrivineEnv)
+  (tail: KrivineEnv)
+  (h: KrivineEnv.correct (KrivineClosure.pair code env :: tail)): KrivineEnv.correct env := sorry
+
+theorem correctness.env.aux₂ (code: KrivineInstruction) (env: KrivineEnv)
+  (tail: KrivineEnv)
+  (h: KrivineEnv.correct (KrivineClosure.pair code env :: tail)): KrivineEnv.correct tail := sorry
+
+theorem correctness.env.aux₃ (code: KrivineInstruction) (env: KrivineEnv)
+  (tail: KrivineEnv)
+  (h: KrivineEnv.correct tail): KrivineEnv.correct (KrivineClosure.pair code env :: tail) := sorry
+
+
+theorem transitionCorrectness (state: KrivineState) (hcorrect: KrivineState.correct state):
+  KrivineState.correct (evalKrivineMachine.getCorrectState state hcorrect) :=
+by
+have (evalKrivineMachine state).isSome := evalKrivineMachine.correctStateSpec state hcorrect
+simp [KrivineState.correct]
+match state.code, state.env, state.stack with
 | KrivineInstruction.Access 0, (KrivineClosure.pair code recEnv :: closures), stack => exact sorry
 | KrivineInstruction.Access n, (KrivineClosure.pair code recEnv :: closures), stack => exact sorry
 | KrivineInstruction.Push c' c, env, stack => exact sorry
@@ -432,4 +468,4 @@ by match state₀.code, state₀.env, state₀.stack with
 -- (evalKrivineMachine state₀ = state₁) -> KrivineState.correct state₀ -> SmallStepBetaReduction (compile.left_inv state₀) (compile.left_inv state₁) := sorry
 
 -- Q5.5
--- theorem 
+-- theorem
