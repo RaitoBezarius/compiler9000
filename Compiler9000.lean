@@ -15,6 +15,10 @@ by induction k with
 theorem Nat.ltAddRight {n m k: Nat} (h: n < m): n < m + k :=
   Nat.add_comm k m ▸ Nat.ltAddLeft h
 
+theorem Nat.ltSuccMaxLeft {a b: Nat}: a < Nat.succ (Nat.max a b) := sorry
+theorem Nat.ltSuccMaxRight {a b: Nat}: b < Nat.succ (Nat.max a b) := sorry
+theorem Nat.succMaxEqMaxSucc {a b: Nat}: Nat.succ (Nat.max a b) = Nat.max (Nat.succ a) (Nat.succ b) := sorry
+
 inductive LambdaTerm where
 | var (val : Nat)
 | app (fn: LambdaTerm) (arg: LambdaTerm)
@@ -173,8 +177,6 @@ by
   simp [batchSubstitute.aux]
   admit
 
-#print Decidable.casesOn
-
 structure BoundedTerm (i : Nat) where
   t : LambdaTerm
   p : C[i](t)
@@ -285,7 +287,7 @@ def KrivineStack := List KrivineClosure
 structure KrivineState where
   code: KrivineInstruction
   env: KrivineEnv
-  stack: KrivineStack
+  stack: KrivineEnv
 
 -- Q3.3
 def evalKrivineMachine (state: KrivineState): Option KrivineState :=
@@ -314,6 +316,15 @@ def compile.leftInv: KrivineInstruction -> LambdaTerm
 | KrivineInstruction.Push c' c => LambdaTerm.app (leftInv c) (leftInv c')
 | KrivineInstruction.Grab c => LambdaTerm.lambda (leftInv c)
 
+def compile.leftInv.env: KrivineEnv -> List LambdaTerm
+| [] => []
+| (KrivineClosure.pair code recEnv) :: e => (leftInv code) :: env e
+
+-- def compile.undo: KrivineState -> LambdaTerm
+-- | state =>
+-- LambdaTerm.app
+-- (batchSubstitute (leftInv state.code) 0 (leftInv.env state.env))
+
 -- Q5.2
 def compile.idOfLeftInv (t: LambdaTerm): compile.leftInv (compile_instr t) = t :=
 by induction t with
@@ -321,52 +332,85 @@ by induction t with
 | app fn arg h_fn h_arg => simp [compile.leftInv, h_fn, h_arg]
 | lambda t ht => simp [compile.leftInv, ht]
 
-
-def KrivineEnv.inv_rel: List KrivineEnv -> List KrivineEnv -> Prop := sorry
-def KrivineEnv.inv_wf (x: List KrivineEnv): Acc inv_rel x := sorry
-
 def List.max: List Nat → Nat
 | [] => 0
 | x :: q => Nat.max x (max q)
 
--- TODO: make sense of this.
-/-def KrivineClosure.depth: KrivineClosure -> Nat
-| KrivineClosure.pair _ e => 1 + List.max (List.map depth e)
-
-def KrivineEnv.correct: KrivineEnv -> Prop
-| [] => true
-| KrivineClosure.pair c₀ e₀ :: closures => C[List.length e₀](compile.leftInv c₀) ∧ (correct e₀) ∧ (correct closures)
+partial def KrivineClosure.depthUnsafe: KrivineClosure -> Nat
+| KrivineClosure.pair i env => List.max (List.map depthUnsafe env) + 1
 
 set_option codegen false in
-@[implementedBy KrivineEnv.correctUnsafe]
-def KrivineEnv.correct (lenv: List KrivineEnv): Prop :=
-WellFounded.fixF (fun e correct => match e with
+@[implementedBy KrivineClosure.depthUnsafe]
+def KrivineClosure.depth: KrivineClosure -> Nat :=
+fun closure => by induction closure with
+| pair i env depth_env => exact depth_env
+| nil => exact 0
+| cons head tail head_depth tail_depth => exact Nat.max (head_depth + 1) (tail_depth + 1)
+
+theorem KrivineClosure.depth.cons (c: KrivineInstruction) (a: KrivineClosure) (q: List KrivineClosure):
+depth (pair c (a :: q)) = Nat.max (depth a + 1) (depth (pair c q) + 1) := rfl
+
+def KrivineClosure.depth.spec: ∀ (c: KrivineInstruction) (x: KrivineClosure) (e: List KrivineClosure),
+  depth x < depth (KrivineClosure.pair c (x :: e)) :=
+fun c x e => by
+simp [KrivineClosure.depth.cons]
+exact Nat.ltSuccMaxLeft
+
+namespace KrivineEnv
+def depth: KrivineEnv -> Nat
+| [] => 0
+| closure :: closures => Nat.max (KrivineClosure.depth closure + 1) (depth closures + 1)
+
+theorem depth_of_kcDepth (c: KrivineInstruction) (x: KrivineEnv): KrivineClosure.depth (KrivineClosure.pair c x) = depth x :=
+by induction x with
+| nil => simp [depth, KrivineClosure.depth]
+| cons a q hq => simp [depth, KrivineClosure.depth.cons, hq]
+
+theorem depth_spec₁: ∀ (c: KrivineInstruction) (x: KrivineEnv) (q: KrivineEnv),
+  measure depth q (KrivineClosure.pair c x :: q) :=
+fun c x q => by
+  simp only [measure, InvImage, depth]
+  rw ← Nat.succMaxEqMaxSucc
+  exact Nat.ltSuccMaxRight
+
+theorem depth_spec₂: ∀ (c: KrivineInstruction) (x: KrivineEnv) (q: KrivineEnv),
+  measure depth x (KrivineClosure.pair c x :: q) :=
+fun c x q => by
+  simp only [measure, InvImage, depth, depth_of_kcDepth]
+  exact Nat.ltSuccMaxLeft
+
+
+def depth_rel: KrivineEnv -> KrivineEnv -> Prop := measure depth
+def depth_wf: WellFounded (measure depth) := measureWf depth
+
+def correct: KrivineEnv -> Prop :=
+WellFounded.fix depth_wf (fun e correct =>
+match e with
   | [] => true
-  | KrivineEnv.Item c₀ e₀ :: env => C[List.length e₀](compile.left_inv c₀) ∧ (correct e₀ (sorry)) ∧ (correct env (sorry))
-) lenv (inv_wf lenv)
-
-
-def KrivineStack.correct: List KrivineStack -> Prop
-| [] => true
-| KrivineStack.Item c₀ e₀ :: stack => C[List.length stack](compile.left_inv c₀) && (KrivineEnv.correctUnsafe e₀) && (correct stack)
+  | KrivineClosure.pair c₀ e₀ :: env =>
+    have e = KrivineClosure.pair c₀ e₀ :: env := by admit
+    C[List.length e₀](compile.leftInv c₀)
+    ∧ (correct e₀ (by rw this; exact depth_spec₂ _ _ _))
+    ∧ (correct env (by rw this; exact depth_spec₁ _ _ _))
+)
+end KrivineEnv
 
 def KrivineState.correct (state: KrivineState): Prop :=
-C[List.length state.env](compile.left_inv state.code) ∧ (KrivineEnv.correct state.env) ∧ (KrivineStack.correct state.stack)
-
-
-def compile.inv.env: List KrivineEnv -> List LambdaTerm
-| [] => []
-| (KrivineEnv.Item code recEnv) :: e => (left_inv code) :: env e
--/
--- compose closures
---def compile.tau: KrivineState -> LambdaTerm
---| c, e, s => LambdaTerm.app (batchSubstitute (inv c) 0 (inv.env e)) (tau )
+  C[List.length state.env](compile.leftInv state.code)
+  ∧ (KrivineEnv.correct state.env)
+  ∧ (KrivineEnv.correct state.stack)
 
 -- Q5.3
---theorem transitionCorrectness (state₀: KrivineState) (state₁: KrivineState)
---  (hTransition: evalKrivineMachine state₀ = state₁): KrivineState.correct state₀ -> KrivineState.correct state₁ := sorry
+theorem transitionCorrectness (state₀: KrivineState) (state₁: KrivineState)
+  (hTransition: evalKrivineMachine state₀ = state₁): KrivineState.correct state₀ -> KrivineState.correct state₁ :=
+by match state₀.code, state₀.env, state₀.stack with
+| KrivineInstruction.Access 0, (KrivineClosure.pair code recEnv :: closures), stack => exact sorry
+| KrivineInstruction.Access n, (KrivineClosure.pair code recEnv :: closures), stack => exact sorry
+| KrivineInstruction.Push c' c, env, stack => exact sorry
+| KrivineInstruction.Grab code, closures, (KrivineClosure.pair c₀ e₀ :: stack) => exact sorry
+| _, _, _ => exact sorry
 
--- Q5.4
+
 -- require the good definition of tau.
 -- theorem simulationCorrectness (state₀: KrivineState) (state₁: KrivineState):
 -- (evalKrivineMachine state₀ = state₁) -> KrivineState.correct state₀ -> SmallStepBetaReduction (compile.left_inv state₀) (compile.left_inv state₁) := sorry
