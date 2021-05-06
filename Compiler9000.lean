@@ -29,7 +29,17 @@ byCases hbc: b ≤ c
 rw [ifPos hbc]; exact hac
 rw [ifNeg hbc]; exact Nat.ltTrans hac (Nat.gtOfNotLe hbc)
 
-theorem Nat.succMaxEqMaxSucc {a b: Nat}: Nat.succ (Nat.max a b) = Nat.max (Nat.succ a) (Nat.succ b) := sorry
+theorem Nat.succMaxEqMaxSucc {a b: Nat}: Nat.succ (Nat.max a b) = Nat.max (Nat.succ a) (Nat.succ b) :=
+by
+simp [Nat.max];
+byCases hab: a ≤ b
+byCases hsucc: succ a ≤ succ b
+rw [ifPos hab, ifPos hsucc]
+admit -- a ≤ b ; b + 1 < a + 1 ; b < a ; a ≤ b < a
+byCases hsucc: succ a ≤ succ b
+admit -- b < a ; a + 1 ≤ b + 1 ; a ≤ b ; b < a ≤ b
+rw [ifNeg hab, ifNeg hsucc]
+
 theorem Nat.ltSuccMaxLeft {a b: Nat}: a < Nat.succ (Nat.max a b) :=
 by rw [succMaxEqMaxSucc]; exact ltMaxLeft (lt.base _)
 theorem Nat.ltSuccMaxRight {a b: Nat}: b < Nat.succ (Nat.max a b) :=
