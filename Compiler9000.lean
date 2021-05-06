@@ -211,7 +211,7 @@ by
     simp only [batchSubstitute, batchSubstitute.aux, batchSubstitute.find, Nat.add_zero]
     byCases h₁ : m ≤ j
     focus
-      rw batchSubstituteFindLower (show m < j + 1 from Nat.ltOfLeOfLt h₁ $ Nat.ltSuccSelf j)
+      rw [batchSubstituteFindLower (show m < j + 1 from Nat.ltOfLeOfLt h₁ $ Nat.ltSuccSelf j)]
       byCases h₂ : m = j
       simp [batchSubstitute.aux, batchSubstitute.find, h₂]
       simp [batchSubstitute.aux, batchSubstitute.find, Ne.symm h₂]
@@ -226,7 +226,7 @@ by
         have p'' := substMinorized p' [hd.t]
         simp only [ifNeg j_ne_m]
         simp only [batchSubstitute] at p''
-        rw p''
+        rw [p'']
   | app fn arg h_fn h_arg =>
     intro j h
     simp [batchSubstitute] at h_fn
