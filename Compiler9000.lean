@@ -453,22 +453,21 @@ theorem correctness.env.aux₁ (code: KrivineInstruction) (env: KrivineEnv)
   (tail: KrivineEnv)
   (h: KrivineEnv.correct (KrivineClosure.pair code env :: tail)): KrivineEnv.correct env :=
 by
-simp [KrivineEnv.correct] at h; rw [KrivineEnv.correct.spec] at h
+simp only [KrivineEnv.correct] at h; rw [KrivineEnv.correct.spec] at h
 exact h.2.1
 
 theorem correctness.env.aux₂ (code: KrivineInstruction) (env: KrivineEnv)
   (tail: KrivineEnv)
   (h: KrivineEnv.correct (KrivineClosure.pair code env :: tail)): KrivineEnv.correct tail :=
 by
-simp [KrivineEnv.correct] at h; rw [KrivineEnv.correct.spec] at h
+simp only [KrivineEnv.correct] at h; rw [KrivineEnv.correct.spec] at h
 exact h.2.2
 
 theorem correctness.env.aux₃ (code: KrivineInstruction) (env: KrivineEnv)
   (tail: KrivineEnv) (h_code: C[List.length env](compile.leftInv code))
   (h_head: KrivineEnv.correct env) (h_tail: KrivineEnv.correct tail): KrivineEnv.correct (KrivineClosure.pair code env :: tail) :=
 by
-simp [KrivineEnv.correct]
-rw [KrivineEnv.correct.spec]
+simp only [KrivineEnv.correct]; rw [KrivineEnv.correct.spec]
 exact ⟨ h_code, ⟨ h_head, h_tail ⟩ ⟩
 
 theorem transitionCorrectness (state: KrivineState) (hcorrect: KrivineState.correct state):
