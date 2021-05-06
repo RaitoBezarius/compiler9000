@@ -408,16 +408,22 @@ fun c x q => by
 def depth_rel: KrivineEnv -> KrivineEnv -> Prop := measure depth
 def depth_wf: WellFounded (measure depth) := measureWf depth
 
+def correctF: (e: KrivineEnv) -> ((y : KrivineEnv) → measure depth y e → Prop) -> Prop :=
+fun e correct => match e with
+| [] => true
+| KrivineClosure.pair c₀ e₀ :: env =>
+  have e = KrivineClosure.pair c₀ e₀ :: env := by admit
+  C[List.length e₀](compile.leftInv c₀)
+  ∧ (correct e₀ (by rw [this]; exact depth_spec₂ _ _ _))
+  ∧ (correct env (by rw [this]; exact depth_spec₁ _ _ _))
+
 def correct: KrivineEnv -> Prop :=
-WellFounded.fix depth_wf (fun e correct =>
-match e with
-  | [] => true
-  | KrivineClosure.pair c₀ e₀ :: env =>
-    have e = KrivineClosure.pair c₀ e₀ :: env := by admit
-    C[List.length e₀](compile.leftInv c₀)
-    ∧ (correct e₀ (by rw [this]; exact depth_spec₂ _ _ _))
-    ∧ (correct env (by rw [this]; exact depth_spec₁ _ _ _))
-)
+WellFounded.fix depth_wf correctF
+
+def correct.spec:
+  ∀ (x: KrivineEnv), WellFounded.fix depth_wf correctF x = correctF x (fun y correct => WellFounded.fix depth_wf correctF y)
+  := WellFounded.fixEq depth_wf correctF
+
 end KrivineEnv
 
 def KrivineState.correct (state: KrivineState): Prop :=
@@ -428,33 +434,48 @@ def KrivineState.correct (state: KrivineState): Prop :=
 -- Q5.3
 theorem evalKrivineMachine.correctStateSpec (state: KrivineState) (hcorrect: KrivineState.correct state): (evalKrivineMachine state).isSome := sorry
 @[reducible]
-theorem evalKrivineMachine.getCorrectState (state: KrivineState) (hcorrect: KrivineState.correct state): KrivineState := (evalKrivineMachine state).get!
+def evalKrivineMachine.getCorrectState (state: KrivineState) (hcorrect: KrivineState.correct state): KrivineState := (evalKrivineMachine state).get!
 
 theorem correctness.code.aux₁ (code: KrivineInstruction) (env: KrivineEnv)
   (tail: KrivineEnv)
-  (h: KrivineEnv.correct (KrivineClosure.pair code env :: tail)): C[List.length env](compile.leftInv code) := sorry
+  (h: KrivineEnv.correct (KrivineClosure.pair code env :: tail)): C[List.length env](compile.leftInv code) :=
+by
+simp [KrivineEnv.correct] at h
+rw [KrivineEnv.correct.spec] at h
+exact h.1
 
 theorem correctness.code.aux₂ (n: Nat):
-  C[n](compile.leftInv $ KrivineInstruction.Access n) -> C[n](compile.leftInv $ KrivineInstruction.Access (n - 1)) := sorry
+  C[Nat.succ n](compile.leftInv $ KrivineInstruction.Access (Nat.succ n)) -> C[Nat.succ n](compile.leftInv $ KrivineInstruction.Access n) :=
+by
+intro h; simp [compile.leftInv, allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux, Nat.lt.base]
 
 theorem correctness.env.aux₁ (code: KrivineInstruction) (env: KrivineEnv)
   (tail: KrivineEnv)
-  (h: KrivineEnv.correct (KrivineClosure.pair code env :: tail)): KrivineEnv.correct env := sorry
+  (h: KrivineEnv.correct (KrivineClosure.pair code env :: tail)): KrivineEnv.correct env :=
+by
+simp [KrivineEnv.correct] at h; rw [KrivineEnv.correct.spec] at h
+exact h.2.1
 
 theorem correctness.env.aux₂ (code: KrivineInstruction) (env: KrivineEnv)
   (tail: KrivineEnv)
-  (h: KrivineEnv.correct (KrivineClosure.pair code env :: tail)): KrivineEnv.correct tail := sorry
+  (h: KrivineEnv.correct (KrivineClosure.pair code env :: tail)): KrivineEnv.correct tail :=
+by
+simp [KrivineEnv.correct] at h; rw [KrivineEnv.correct.spec] at h
+exact h.2.2
 
 theorem correctness.env.aux₃ (code: KrivineInstruction) (env: KrivineEnv)
-  (tail: KrivineEnv)
-  (h: KrivineEnv.correct tail): KrivineEnv.correct (KrivineClosure.pair code env :: tail) := sorry
-
+  (tail: KrivineEnv) (h_code: C[List.length env](compile.leftInv code))
+  (h_head: KrivineEnv.correct env) (h_tail: KrivineEnv.correct tail): KrivineEnv.correct (KrivineClosure.pair code env :: tail) :=
+by
+simp [KrivineEnv.correct]
+rw [KrivineEnv.correct.spec]
+exact ⟨ h_code, ⟨ h_head, h_tail ⟩ ⟩
 
 theorem transitionCorrectness (state: KrivineState) (hcorrect: KrivineState.correct state):
   KrivineState.correct (evalKrivineMachine.getCorrectState state hcorrect) :=
 by
 have (evalKrivineMachine state).isSome := evalKrivineMachine.correctStateSpec state hcorrect
-simp [KrivineState.correct]
+simp [KrivineState.correct, evalKrivineMachine.getCorrectState]
 match state.code, state.env, state.stack with
 | KrivineInstruction.Access 0, (KrivineClosure.pair code recEnv :: closures), stack => exact sorry
 | KrivineInstruction.Access n, (KrivineClosure.pair code recEnv :: closures), stack => exact sorry
