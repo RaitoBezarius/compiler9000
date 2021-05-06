@@ -335,7 +335,7 @@ instance : Inhabited KrivineState where
   default := { code := KrivineInstruction.Access 0, env := [], stack := [] }
 
 -- Q3.3
-@[reducible]
+-- @[reducible]
 def evalKrivineMachine (state: KrivineState): Option KrivineState :=
 match state.code, state.env, state.stack with
 | KrivineInstruction.Access 0, (KrivineClosure.pair code recEnv :: closures), stack =>
@@ -480,7 +480,7 @@ def KrivineState.correct (state: KrivineState): Prop :=
 
 -- Q5.3
 theorem evalKrivineMachine.correctStateSpec (state: KrivineState) (hcorrect: KrivineState.correct state): (evalKrivineMachine state).isSome := sorry
-@[reducible]
+-- @[reducible]
 def evalKrivineMachine.getCorrectState (state: KrivineState) (hcorrect: KrivineState.correct state): KrivineState := (evalKrivineMachine state).get!
 
 theorem correctness.code.aux₁ (code: KrivineInstruction) (env: KrivineEnv)
@@ -496,6 +496,18 @@ theorem correctness.code.aux₂ (n: Nat):
 by
 intro h; simp [undoInstruction, allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux, Nat.lt.base]
 
+theorem correctness.code.aux₃ {c c': KrivineInstruction} {n: Nat}:
+  C[n](undoInstruction $ KrivineInstruction.Push c c') -> C[n](undoInstruction c') ∧ C[n](undoInstruction c) :=
+by
+simp [undoInstruction, allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux]
+exact (fun a => a)
+
+theorem correctness.code.aux₄ {c: KrivineInstruction}:
+  C[n](undoInstruction $ KrivineInstruction.Grab c) -> C[Nat.succ n](undoInstruction c) :=
+by
+simp [undoInstruction, allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux]
+exact (fun H => by apply (allFreeVariablesBoundBy.auxRec₂).2; exact H)
+
 theorem correctness.env.aux₁ (code: KrivineInstruction) (env: KrivineEnv)
   (tail: KrivineEnv)
   (h: KrivineEnv.correct (KrivineClosure.pair code env :: tail)): KrivineEnv.correct env :=
@@ -503,15 +515,15 @@ by
 simp only [KrivineEnv.correct] at h; rw [KrivineEnv.correct.spec] at h
 exact h.2.1
 
-theorem correctness.env.aux₂ (code: KrivineInstruction) (env: KrivineEnv)
-  (tail: KrivineEnv)
+theorem correctness.env.aux₂ {code: KrivineInstruction} {env: KrivineEnv}
+  {tail: KrivineEnv}
   (h: KrivineEnv.correct (KrivineClosure.pair code env :: tail)): KrivineEnv.correct tail :=
 by
 simp only [KrivineEnv.correct] at h; rw [KrivineEnv.correct.spec] at h
 exact h.2.2
 
-theorem correctness.env.aux₃ (code: KrivineInstruction) (env: KrivineEnv)
-  (tail: KrivineEnv) (h_code: C[List.length env](undoInstruction code))
+theorem correctness.env.aux₃ {code: KrivineInstruction} {env: KrivineEnv}
+  {tail: KrivineEnv} (h_code: C[List.length env](undoInstruction code))
   (h_head: KrivineEnv.correct env) (h_tail: KrivineEnv.correct tail): KrivineEnv.correct (KrivineClosure.pair code env :: tail) :=
 by
 simp only [KrivineEnv.correct]; rw [KrivineEnv.correct.spec]
@@ -522,12 +534,30 @@ theorem transitionCorrectness (state: KrivineState) (hcorrect: KrivineState.corr
 by
 have (evalKrivineMachine state).isSome := evalKrivineMachine.correctStateSpec state hcorrect
 simp [KrivineState.correct, evalKrivineMachine.getCorrectState]
-match state.code, state.env, state.stack with
-| KrivineInstruction.Access 0, (KrivineClosure.pair code recEnv :: closures), stack => exact sorry
-| KrivineInstruction.Access n, (KrivineClosure.pair code recEnv :: closures), stack => exact sorry
-| KrivineInstruction.Push c' c, env, stack => exact sorry
-| KrivineInstruction.Grab code, closures, (KrivineClosure.pair c₀ e₀ :: stack) => exact sorry
-| _, _, _ => exact sorry
+match state with
+| KrivineState.mk code env stack =>
+  match code, env, stack with
+  | KrivineInstruction.Access 0, (KrivineClosure.pair code recEnv :: closures), stack => 
+    simp [KrivineState.correct] at hcorrect
+    -- set_option trace.Meta.Simp.simp true in
+    simp [evalKrivineMachine, Option.get!]
+    admit
+  | KrivineInstruction.Access n, (KrivineClosure.pair code recEnv :: closures), stack =>
+    simp [KrivineState.correct] at hcorrect
+    simp [evalKrivineMachine, Option.get!]
+    admit
+  | KrivineInstruction.Push c' c, env, stack =>
+    simp [KrivineState.correct] at hcorrect
+    simp [evalKrivineMachine, Option.get!]
+    exact ⟨ (correctness.code.aux₃ hcorrect.1).1, ⟨ hcorrect.2.1, correctness.env.aux₃ (sorry) (sorry) (sorry)⟩⟩ 
+  | KrivineInstruction.Grab code, closures, (KrivineClosure.pair c₀ e₀ :: stack) => 
+    simp [KrivineState.correct] at hcorrect
+    simp [evalKrivineMachine, Option.get!]
+    exact ⟨ correctness.code.aux₄ hcorrect.1, ⟨ correctness.env.aux₃ (sorry) (sorry) (sorry), correctness.env.aux₂ hcorrect.2.2 ⟩ ⟩
+  | _, _, _ => 
+    simp [KrivineState.correct] at hcorrect
+    simp [evalKrivineMachine, Option.get!]
+    admit
 
 -- Q5.4
 
