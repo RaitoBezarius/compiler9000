@@ -365,11 +365,27 @@ def undoClosure : KrivineClosure → LambdaTerm := KrivineClosure.rec
   []
   (λ hd tl hd_undone tl_undone => hd_undone :: tl_undone)
 
+/-def a : List KrivineClosure → LambdaTerm := KrivineClosure.rec_1
+  (λ inst env env_undone => (undoInstruction inst)[0 ← env_undone])
+  []
+  (λ hd tl hd_undone tl_undone => hd_undone :: tl_undone)-/
+
 set_option codegen false in
 def undo (s : KrivineState) : LambdaTerm := List.foldl
   (λ f arg => LambdaTerm.app f $ undoClosure arg)
   ((undoInstruction s.code)[0 ← List.map undoClosure s.env])
   s.stack
+
+theorem undoClosureSpec :
+  undoClosure (KrivineClosure.pair i e) = (undoInstruction i)[0 ← List.map undoClosure e] :=
+by
+  simp [undoClosure]
+  apply show ∀ {x y}, x = y → (undoInstruction i)[0 ← x] = (undoInstruction i)[0 ← y] from λ h => by rw [h]
+  induction e with
+  | nil => simp
+  | cons hd tl h_tl =>
+    simp [List.map]
+    rw [h_tl]
 
 -- Q5.2
 def compile.idOfLeftInv (t: LambdaTerm): undoInstruction (compile_instr t) = t :=
@@ -507,8 +523,40 @@ match state.code, state.env, state.stack with
 
 theorem simulationCorrectness (state₀ : KrivineState) (state₁ : KrivineState)
  (eval : evalKrivineMachine state₀ = state₁) (correct : KrivineState.correct state₀) :
- SmallStepBetaReduction (undo state₀) (undo state₁) :=
-by admit
+ SmallStepBetaReduction (undo state₀) (undo state₁) ∨ undo state₀ = undo state₁ :=
+by match state₀ with
+| KrivineState.mk code state stack =>
+  induction code with
+  | Access n => match state with
+    | [] =>
+      simp [evalKrivineMachine] at eval
+      admit
+    | KrivineClosure.pair code recEnv :: closures =>
+      byCases h : n = 0
+      focus
+        rw [h] at eval
+        simp [evalKrivineMachine] at eval
+        admit
+      focus
+        simp [evalKrivineMachine, h] at eval
+        admit
+  | Push c' c c'_h c_h =>
+    simp [evalKrivineMachine] at eval
+    apply Option.noConfusion eval
+    intro eval
+    rw [← eval]
+    simp [undo, undoInstruction, batchSubstitute, batchSubstitute.aux, undoClosureSpec, List.foldl]
+  | Grab c c_h => match stack with
+    | [] => simp [evalKrivineMachine] at eval
+    | KrivineClosure.pair code recEnv :: closures =>
+      simp [evalKrivineMachine] at eval
+      apply Option.noConfusion eval
+      intro eval
+      rw [← eval]
+      simp [undo, undoInstruction, batchSubstitute, batchSubstitute.aux,
+        undoClosureSpec, List.foldl, List.map]
+      simp [KrivineState.correct] at correct
+      admit
 
 -- Q5.5
 -- theorem
