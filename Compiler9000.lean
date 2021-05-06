@@ -354,26 +354,29 @@ fun t => KrivineState.mk (compile_instr t) [] []
 -- Part 5
 
 -- Q5.1
-def compile.leftInv: KrivineInstruction -> LambdaTerm
+def undoInstruction : KrivineInstruction → LambdaTerm
 | KrivineInstruction.Access n => LambdaTerm.var n
-| KrivineInstruction.Push c' c => LambdaTerm.app (leftInv c) (leftInv c')
-| KrivineInstruction.Grab c => LambdaTerm.lambda (leftInv c)
+| KrivineInstruction.Push c' c => LambdaTerm.app (undoInstruction c) (undoInstruction c')
+| KrivineInstruction.Grab c => LambdaTerm.lambda (undoInstruction c)
 
-def compile.leftInv.env: KrivineEnv -> List LambdaTerm
-| [] => []
-| (KrivineClosure.pair code recEnv) :: e => (leftInv code) :: env e
+set_option codegen false in
+def undoClosure : KrivineClosure → LambdaTerm := KrivineClosure.rec
+  (λ inst env env_undone => (undoInstruction inst)[0 ← env_undone])
+  []
+  (λ hd tl hd_undone tl_undone => hd_undone :: tl_undone)
 
--- def compile.undo: KrivineState -> LambdaTerm
--- | state =>
--- LambdaTerm.app
--- (batchSubstitute (leftInv state.code) 0 (leftInv.env state.env))
+set_option codegen false in
+def undo (s : KrivineState) : LambdaTerm := List.foldl
+  (λ f arg => LambdaTerm.app f $ undoClosure arg)
+  ((undoInstruction s.code)[0 ← List.map undoClosure s.env])
+  s.stack
 
 -- Q5.2
-def compile.idOfLeftInv (t: LambdaTerm): compile.leftInv (compile_instr t) = t :=
+def compile.idOfLeftInv (t: LambdaTerm): undoInstruction (compile_instr t) = t :=
 by induction t with
 | var n => rfl
-| app fn arg h_fn h_arg => simp [compile.leftInv, h_fn, h_arg]
-| lambda t ht => simp [compile.leftInv, ht]
+| app fn arg h_fn h_arg => simp [undoInstruction, h_fn, h_arg]
+| lambda t ht => simp [undoInstruction, ht]
 
 def List.max: List Nat → Nat
 | [] => 0
@@ -431,7 +434,7 @@ fun e correct => match e with
 | [] => true
 | KrivineClosure.pair c₀ e₀ :: env =>
   have e = KrivineClosure.pair c₀ e₀ :: env := by admit
-  C[List.length e₀](compile.leftInv c₀)
+  C[List.length e₀](undoInstruction c₀)
   ∧ (correct e₀ (by rw [this]; exact depth_spec₂ _ _ _))
   ∧ (correct env (by rw [this]; exact depth_spec₁ _ _ _))
 
@@ -445,7 +448,7 @@ def correct.spec:
 end KrivineEnv
 
 def KrivineState.correct (state: KrivineState): Prop :=
-  C[List.length state.env](compile.leftInv state.code)
+  C[List.length state.env](undoInstruction state.code)
   ∧ (KrivineEnv.correct state.env)
   ∧ (KrivineEnv.correct state.stack)
 
@@ -456,16 +459,16 @@ def evalKrivineMachine.getCorrectState (state: KrivineState) (hcorrect: KrivineS
 
 theorem correctness.code.aux₁ (code: KrivineInstruction) (env: KrivineEnv)
   (tail: KrivineEnv)
-  (h: KrivineEnv.correct (KrivineClosure.pair code env :: tail)): C[List.length env](compile.leftInv code) :=
+  (h: KrivineEnv.correct (KrivineClosure.pair code env :: tail)): C[List.length env](undoInstruction code) :=
 by
 simp [KrivineEnv.correct] at h
 rw [KrivineEnv.correct.spec] at h
 exact h.1
 
 theorem correctness.code.aux₂ (n: Nat):
-  C[Nat.succ n](compile.leftInv $ KrivineInstruction.Access (Nat.succ n)) -> C[Nat.succ n](compile.leftInv $ KrivineInstruction.Access n) :=
+  C[Nat.succ n](undoInstruction $ KrivineInstruction.Access (Nat.succ n)) -> C[Nat.succ n](undoInstruction $ KrivineInstruction.Access n) :=
 by
-intro h; simp [compile.leftInv, allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux, Nat.lt.base]
+intro h; simp [undoInstruction, allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux, Nat.lt.base]
 
 theorem correctness.env.aux₁ (code: KrivineInstruction) (env: KrivineEnv)
   (tail: KrivineEnv)
@@ -482,7 +485,7 @@ simp only [KrivineEnv.correct] at h; rw [KrivineEnv.correct.spec] at h
 exact h.2.2
 
 theorem correctness.env.aux₃ (code: KrivineInstruction) (env: KrivineEnv)
-  (tail: KrivineEnv) (h_code: C[List.length env](compile.leftInv code))
+  (tail: KrivineEnv) (h_code: C[List.length env](undoInstruction code))
   (h_head: KrivineEnv.correct env) (h_tail: KrivineEnv.correct tail): KrivineEnv.correct (KrivineClosure.pair code env :: tail) :=
 by
 simp only [KrivineEnv.correct]; rw [KrivineEnv.correct.spec]
@@ -500,10 +503,12 @@ match state.code, state.env, state.stack with
 | KrivineInstruction.Grab code, closures, (KrivineClosure.pair c₀ e₀ :: stack) => exact sorry
 | _, _, _ => exact sorry
 
+-- Q5.4
 
--- require the good definition of tau.
--- theorem simulationCorrectness (state₀: KrivineState) (state₁: KrivineState):
--- (evalKrivineMachine state₀ = state₁) -> KrivineState.correct state₀ -> SmallStepBetaReduction (compile.left_inv state₀) (compile.left_inv state₁) := sorry
+theorem simulationCorrectness (state₀ : KrivineState) (state₁ : KrivineState)
+ (eval : evalKrivineMachine state₀ = state₁) (correct : KrivineState.correct state₀) :
+ SmallStepBetaReduction (undo state₀) (undo state₁) :=
+by admit
 
 -- Q5.5
 -- theorem
