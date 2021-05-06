@@ -15,9 +15,25 @@ by induction k with
 theorem Nat.ltAddRight {n m k: Nat} (h: n < m): n < m + k :=
   Nat.add_comm k m ▸ Nat.ltAddLeft h
 
-theorem Nat.ltSuccMaxLeft {a b: Nat}: a < Nat.succ (Nat.max a b) := sorry
-theorem Nat.ltSuccMaxRight {a b: Nat}: b < Nat.succ (Nat.max a b) := sorry
+theorem Nat.ltMaxLeft {a b c: Nat}: a < b -> a < Nat.max b c :=
+fun hab => by
+simp only [Nat.max]
+byCases hbc: b ≤ c
+rw [ifPos hbc]; exact Nat.ltOfLtOfLe hab hbc
+rw [ifNeg hbc]; exact hab
+
+theorem Nat.ltMaxRight {a b c: Nat}: a < c -> a < Nat.max b c :=
+fun hac => by
+simp only [Nat.max]
+byCases hbc: b ≤ c
+rw [ifPos hbc]; exact hac
+rw [ifNeg hbc]; exact Nat.ltTrans hac (Nat.gtOfNotLe hbc)
+
 theorem Nat.succMaxEqMaxSucc {a b: Nat}: Nat.succ (Nat.max a b) = Nat.max (Nat.succ a) (Nat.succ b) := sorry
+theorem Nat.ltSuccMaxLeft {a b: Nat}: a < Nat.succ (Nat.max a b) :=
+by rw [succMaxEqMaxSucc]; exact ltMaxLeft (lt.base _)
+theorem Nat.ltSuccMaxRight {a b: Nat}: b < Nat.succ (Nat.max a b) :=
+by rw [succMaxEqMaxSucc]; exact ltMaxRight (lt.base _)
 
 inductive LambdaTerm where
 | var (val : Nat)
@@ -322,6 +338,8 @@ match state.code, state.env, state.stack with
   some $ KrivineState.mk code (KrivineClosure.pair c₀ e₀ :: closures) stack
 | _, _, _ =>
   none
+
+-- #reduce evalKrivineMachine { code := KrivineInstruction.Push (KrivineInstruction.Access 0) (KrivineInstruction.Access 0), env := [], stack := [] }
 
 -- Part 4
 -- Q4.1
