@@ -2,6 +2,8 @@ import Lean
 open Classical
 
 -- For Core / standard library?
+def List.forall (p : α → Prop) := List.foldr (λ a b => p a ∧ b) True
+
 theorem Nat.neOfLt {n m: Nat} (h: n < m): n ≠ m :=
 by
 intro heq;
@@ -158,7 +160,7 @@ by induction t generalizing depth with
   | app fn arg h_fn h_arg => simp [batchSubstitute.aux, h_fn, h_arg]
   | lambda body h_body => simp [batchSubstitute.aux, h_body]
 
-theorem substEmpty (t : LambdaTerm) {i : Nat} (depth : Nat) :
+theorem substEmpty (t : LambdaTerm) {i : Nat} :
   t[i ← []] = t :=
 by induction t generalizing i with
 | var m => simp [batchSubstitute, batchSubstitute.aux, batchSubstitute.find]
@@ -204,32 +206,28 @@ by induction l generalizing i with
   simp only [Nat.add_zero, batchSubstitute.find, ifNeg $ Ne.symm $ Nat.neOfLt h]
   exact h_tl $ Nat.ltTrans h $ Nat.ltSuccSelf i
 
-structure BoundedTerm (i : Nat) where
-  t : LambdaTerm
-  p : C[i](t)
-
-theorem batchSubstituteFindMinorized (l : List (BoundedTerm i)) (i_le_j : i ≤ j) (depth m : Nat) :
+theorem batchSubstituteFindMinorized (l : List LambdaTerm)
+  (h_l : List.forall (λ t => C[i](t)) l) (i_le_j : i ≤ j) (depth m : Nat) :
   (λ result => result = LambdaTerm.var m ∨ C[i](result)) $
-  batchSubstitute.find (List.enumFrom j (List.map (λ x => x.t) l)) depth m :=
+  batchSubstitute.find (List.enumFrom j l) depth m :=
 by induction l generalizing j with
 | nil => simp [batchSubstitute.find]
 | cons hd tl h_tl =>
   simp only [batchSubstitute.find]
+  simp only [List.forall, List.foldr] at h_l
   byCases h : j + depth = m
   focus
     simp only [ifPos h]
-    exact Or.inr hd.p
+    exact Or.inr h_l.1
   focus
     simp only [ifNeg h]
-    exact h_tl $ Nat.leTrans i_le_j $ Nat.leSucc j
+    exact h_tl h_l.2 $ Nat.leTrans i_le_j $ Nat.leSucc j
 
-theorem substRotate (t : LambdaTerm) {i : Nat} (hd : BoundedTerm i) (tl : List (BoundedTerm i)) :
-  t[i ← hd.t :: List.map (λ x => x.t) tl] =
-  t[(i + 1) ← List.map (λ x => x.t) tl][i ← [hd.t]] :=
+theorem substRotate (t : LambdaTerm) {i : Nat} {hd : LambdaTerm} {tl : List LambdaTerm}
+  (h_hd : C[i](hd)) (h_tl : List.forall (λ t => C[i](t)) tl) :
+  t[i ← hd :: tl] = t[(i + 1) ← tl][i ← [hd]] :=
 by
-  suffices p : ∀ j : Nat, i ≤ j →
-    t[j ← hd.t :: List.map (λ x => x.t) tl] =
-    t[(j + 1) ← List.map (λ x => x.t) tl][j ← [hd.t]]
+  suffices p : ∀ j : Nat, i ≤ j → t[j ← hd :: tl] = t[(j + 1) ← tl][j ← [hd]]
   by exact p i (Nat.leRefl i)
   induction t with
   | var m =>
@@ -243,13 +241,13 @@ by
       simp [batchSubstitute.aux, batchSubstitute.find, Ne.symm h₂]
     focus
       have j_ne_m : j ≠ m := λ h' => h₁ $ Nat.leOfEq h'.symm
-      have p := batchSubstituteFindMinorized tl (Nat.leTrans h $ Nat.leSucc j) 0 m
+      have p := batchSubstituteFindMinorized tl h_tl (Nat.leTrans h $ Nat.leSucc j) 0 m
       simp at p
       cases p with
       | inl h => simp [h, batchSubstitute.aux, batchSubstitute.find, j_ne_m]
       | inr h' =>
         have p' : C[j](_) := boundByGreater h h'
-        have p'' := substMinorized p' [hd.t]
+        have p'' := substMinorized p' [hd]
         simp only [ifNeg j_ne_m]
         simp only [batchSubstitute] at p''
         rw [p'']
@@ -264,10 +262,76 @@ by
     simp only [batchSubstitute, batchSubstitute.aux, batchSubstituteSwap]
     rw [h_body (j + 1) (Nat.leTrans h $ Nat.leSucc j)]
 
+-- Another useful lemma
+theorem substAllByClosed {l : List LambdaTerm} {t : LambdaTerm}
+  (h₁ : C[List.length l](t)) (h₂ : List.forall (λ t => C[0](t)) l) : C[0](t[0 ← l]) :=
+by
+  suffices p : ∀ {t i}, C[List.length l + i](t) →
+    C[i](t[i ← l])
+  by
+    apply p
+    rw [Nat.add_zero]
+    exact h₁
+  intro t
+  induction t with
+  | var m =>
+    intro i h
+    simp only [allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux] at h
+    simp only [batchSubstitute, batchSubstitute.aux]
+    suffices p :
+      ∀ l j, (List.forall (λ t => C[0](t)) l) →
+      (m < List.length l + j + i) →
+      C[0](batchSubstitute.find (List.enumFrom (j + i) l) 0 m) ∨
+      (batchSubstitute.find (List.enumFrom (j + i) l) 0 m = LambdaTerm.var m ∧ m < j + i)
+    from match p l 0 h₂ h with
+    | Or.inl p => boundByGreater (Nat.zeroLe i) (Nat.zero_add i ▸ p)
+    | Or.inr p => by
+      simp [Nat.add_zero] at p
+      rw [p.1];
+      exact p.2
+    intro l j hl h
+    induction l generalizing j with
+    | nil =>
+      apply Or.inr
+      simp [List.enumFrom, batchSubstitute.find]
+      simp [List.length_nil] at h
+      exact h
+    | cons hd tl h_tl =>
+      simp [List.forall, List.foldr] at hl
+      simp [List.length_cons, (Nat.add_one _).symm] at h
+      rw [Nat.add_assoc _ 1 j] at h
+      have p := h_tl (1 + j) hl.2 h
+      byCases hm : m < j + i
+      focus simp [batchSubstituteFindLower hm, hm]
+      focus
+        byCases hm' : j + i = m
+        focus simp [List.enumFrom, batchSubstitute.find, hm', hl.1]
+        focus match p with
+        | Or.inl p =>
+          apply Or.inl
+          simp [List.enumFrom, batchSubstitute.find, hm']
+          exact (show j + i + 1 = 1 + j + i from sorry) ▸ p
+        | Or.inr p =>
+          exact absurd p.2 (show ¬ m < 1 + j + i from sorry)
+  | app fn arg h_fn h_arg =>
+    intro i h
+    simp [allFreeVariablesBoundBy, batchSubstitute] at h_fn
+    simp [allFreeVariablesBoundBy, batchSubstitute] at h_arg
+    simp [allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux, h_fn h.1, h_arg h.2]
+  | lambda body h_body =>
+    intro i h
+    simp [allFreeVariablesBoundBy, batchSubstitute] at h_body
+    simp [allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux]
+    have p := allFreeVariablesBoundBy.lambda h
+    simp [allFreeVariablesBoundBy] at p
+    simp [batchSubstituteSwap]
+    apply allFreeVariablesBoundBy.auxRec₂.1
+    exact h_body p
+
 -- Part 2
 -- Q2.1
 inductive SmallStepBetaReduction: LambdaTerm -> LambdaTerm -> Prop :=
-| Eval : ∀ (u v: LambdaTerm), SmallStepBetaReduction (LambdaTerm.app (LambdaTerm.lambda u) v) (substitute t 0 u)
+| Eval : ∀ (u v: LambdaTerm), SmallStepBetaReduction (LambdaTerm.app (LambdaTerm.lambda u) v) (u[0 ← [v]])
 | LeftContext : ∀ (u v t: LambdaTerm), SmallStepBetaReduction t u -> SmallStepBetaReduction (LambdaTerm.app t v) (LambdaTerm.app u v)
 | RightContext : ∀ (t u v : LambdaTerm), SmallStepBetaReduction t u -> SmallStepBetaReduction (LambdaTerm.app v t) (LambdaTerm.app v u)
 | LambdaContext : ∀ (t u : LambdaTerm), SmallStepBetaReduction t u -> SmallStepBetaReduction (LambdaTerm.lambda t) (LambdaTerm.lambda u)
@@ -561,6 +625,37 @@ match state with
 
 -- Q5.4
 
+theorem lemma₀ : SmallStepBetaReduction u v →
+  SmallStepBetaReduction
+    (List.foldl (λ f arg => LambdaTerm.app f (undoClosure arg)) u l)
+    (List.foldl (λ f arg => LambdaTerm.app f (undoClosure arg)) v l) :=
+by induction l generalizing u v with
+| nil =>
+  simp [List.foldl]
+  exact λ h => h
+| cons hd tl tl_h =>
+  intro h
+  apply tl_h
+  simp [List.foldl]
+  exact SmallStepBetaReduction.LeftContext _ _ _ h
+
+#print substRotate
+
+theorem lemma₁ (h₁ : C[0](u)) (h₂ : List.forall (λ t => C[0](t)) l) :
+  SmallStepBetaReduction (LambdaTerm.app (LambdaTerm.lambda (t[1 ← l])) u) (t[0 ← u :: l]) :=
+by 
+  rw [substRotate t h₁ h₂]
+  apply SmallStepBetaReduction.Eval
+
+theorem lemma₂ {state : KrivineState} (correct : KrivineState.correct state) :
+  C[0]((undoInstruction state.code)[0 ← List.map undoClosure state.env]) :=
+by
+  admit
+
+theorem closedOfCorrect {env : KrivineEnv} (correct : KrivineEnv.correct env) :
+  List.forall (λ t => C[0](t)) (List.map undoClosure env) :=
+by admit
+
 theorem simulationCorrectness (state₀ : KrivineState) (state₁ : KrivineState)
  (eval : evalKrivineMachine state₀ = state₁) (correct : KrivineState.correct state₀) :
  SmallStepBetaReduction (undo state₀) (undo state₁) ∨ undo state₀ = undo state₁ :=
@@ -586,7 +681,9 @@ by match state₀ with
     intro eval
     rw [← eval]
     simp [undo, undoInstruction, batchSubstitute, batchSubstitute.aux, undoClosureSpec, List.foldl]
-  | Grab c c_h => match stack with
+  | Grab c c_h =>
+    apply Or.inl
+    match stack with
     | [] => simp [evalKrivineMachine] at eval
     | KrivineClosure.pair code recEnv :: closures =>
       simp [evalKrivineMachine] at eval
@@ -596,7 +693,13 @@ by match state₀ with
       simp [undo, undoInstruction, batchSubstitute, batchSubstitute.aux,
         undoClosureSpec, List.foldl, List.map]
       simp [KrivineState.correct] at correct
-      admit
+      apply lemma₀
+      simp [batchSubstituteSwap]
+      have p₁ : C[0]((undoInstruction code)[0 ← List.map undoClosure recEnv]) := by
+        apply substAllByClosed
+        admit
+        admit
+      apply lemma₁ p₁ (closedOfCorrect correct.2.1)
 
 -- Q5.5
 -- theorem
