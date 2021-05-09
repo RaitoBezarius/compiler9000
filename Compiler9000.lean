@@ -3,6 +3,16 @@ open Classical
 
 -- For Core / standard library?
 def List.forall (p : α → Prop) := List.foldr (λ a b => p a ∧ b) True
+theorem Option.someOfNotNone {T: Type} (x: Option T): x ≠ none <-> ∃ t: T, x = some t :=
+by
+apply Iff.intro
+intro notNone
+match x with
+| some u => exact ⟨u, by rfl⟩
+| none => exact absurd notNone (by simp)
+intro hsome
+rw [hsome.2]
+exact Option.noConfusion
 
 theorem Nat.neOfLt {n m: Nat} (h: n < m): n ≠ m :=
 by
@@ -404,16 +414,14 @@ def evalKrivineMachine (state: KrivineState): Option KrivineState :=
 match state.code, state.env, state.stack with
 | KrivineInstruction.Access 0, (KrivineClosure.pair code recEnv :: closures), stack =>
   some $ KrivineState.mk code recEnv stack
-| KrivineInstruction.Access n, (KrivineClosure.pair code recEnv :: closures), stack =>
-  some $ KrivineState.mk (KrivineInstruction.Access (n - 1)) closures stack
+| KrivineInstruction.Access (Nat.succ n), (KrivineClosure.pair code recEnv :: closures), stack =>
+  some $ KrivineState.mk (KrivineInstruction.Access n) closures stack
 | KrivineInstruction.Push c' c, env, stack =>
   some $ KrivineState.mk c env (KrivineClosure.pair c' env :: stack)
 | KrivineInstruction.Grab code, closures, (KrivineClosure.pair c₀ e₀ :: stack) =>
   some $ KrivineState.mk code (KrivineClosure.pair c₀ e₀ :: closures) stack
 | _, _, _ =>
   none
-
--- #reduce evalKrivineMachine { code := KrivineInstruction.Push (KrivineInstruction.Access 0) (KrivineInstruction.Access 0), env := [], stack := [] }
 
 -- Part 4
 -- Q4.1
@@ -520,13 +528,12 @@ def depth_rel: KrivineEnv -> KrivineEnv -> Prop := measure depth
 def depth_wf: WellFounded (measure depth) := measureWf depth
 
 def correctF: (e: KrivineEnv) -> ((y : KrivineEnv) → measure depth y e → Prop) -> Prop :=
-fun e correct => match e with
+fun e correct => match (generalizing := true) e with
 | [] => true
 | KrivineClosure.pair c₀ e₀ :: env =>
-  have e = KrivineClosure.pair c₀ e₀ :: env := by admit
   C[List.length e₀](undoInstruction c₀)
-  ∧ (correct e₀ (by rw [this]; exact depth_spec₂ _ _ _))
-  ∧ (correct env (by rw [this]; exact depth_spec₁ _ _ _))
+  ∧ (correct e₀ (depth_spec₂ _ _ _))
+  ∧ (correct env (depth_spec₁ _ _ _))
 
 def correct: KrivineEnv -> Prop :=
 WellFounded.fix depth_wf correctF
@@ -543,8 +550,39 @@ def KrivineState.correct (state: KrivineState): Prop :=
   ∧ (KrivineEnv.correct state.stack)
 
 -- Q5.3
-theorem evalKrivineMachine.correctStateSpec (state: KrivineState) (hcorrect: KrivineState.correct state): (evalKrivineMachine state).isSome := sorry
--- @[reducible]
+theorem Classical.dne {p: Prop}: ¬¬p -> p :=
+fun hnnp => match (em p) with
+| Or.inl hp => hp
+| Or.inr hnp => absurd hnp hnnp
+
+theorem evalKrivineMachine.correctStateSpec (state: KrivineState) (hcorrect: KrivineState.correct state): (evalKrivineMachine state) ≠ none :=
+byContradiction (fun hcontra =>
+  by
+  simp at hcontra
+  have evalKrivineMachine state = none from Classical.dne hcontra
+  match state with
+  | KrivineState.mk code env stack =>
+    match code with
+    | KrivineInstruction.Access 0 =>
+      match env, stack with
+      | (KrivineClosure.pair code recEnv :: closures), stack =>
+        exact absurd this ((Option.someOfNotNone _).2 _)
+    | KrivineInstruction.Access (Nat.succ n) =>
+      match env, stack with
+      | (KrivineClosure.pair code recEnv :: closures), stack =>
+        exact absurd this ((Option.someOfNotNone _).2 _)
+    | KrivineInstruction.Push c' c =>
+      match env, stack with
+      | env, stack =>
+        exact absurd this ((Option.someOfNotNone _).2 _)
+    | KrivineInstruction.Grab code =>
+      match env, stack with
+      | closures, (KrivineClosure.pair c₀ e₀ :: stack) =>
+        exact absurd this ((Option.someOfNotNone _).2 _)
+      | env, [] =>
+        exact absurd (hcorrect.2.2) _
+)
+
 def evalKrivineMachine.getCorrectState (state: KrivineState) (hcorrect: KrivineState.correct state): KrivineState := (evalKrivineMachine state).get!
 
 theorem correctness.code.aux₁ (code: KrivineInstruction) (env: KrivineEnv)
@@ -555,10 +593,10 @@ simp [KrivineEnv.correct] at h
 rw [KrivineEnv.correct.spec] at h
 exact h.1
 
-theorem correctness.code.aux₂ (n: Nat):
-  C[Nat.succ n](undoInstruction $ KrivineInstruction.Access (Nat.succ n)) -> C[Nat.succ n](undoInstruction $ KrivineInstruction.Access n) :=
+theorem correctness.code.aux₂ (m n: Nat) (hnm: n < m):
+  C[m](undoInstruction $ KrivineInstruction.Access (Nat.succ n)) -> C[m](undoInstruction $ KrivineInstruction.Access n) :=
 by
-intro h; simp [undoInstruction, allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux, Nat.lt.base]
+intro h; simp [undoInstruction, allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux, Nat.lt.base]; exact hnm
 
 theorem correctness.code.aux₃ {c c': KrivineInstruction} {n: Nat}:
   C[n](undoInstruction $ KrivineInstruction.Push c c') -> C[n](undoInstruction c') ∧ C[n](undoInstruction c) :=
@@ -596,32 +634,41 @@ exact ⟨ h_code, ⟨ h_head, h_tail ⟩ ⟩
 theorem transitionCorrectness (state: KrivineState) (hcorrect: KrivineState.correct state):
   KrivineState.correct (evalKrivineMachine.getCorrectState state hcorrect) :=
 by
-have (evalKrivineMachine state).isSome := evalKrivineMachine.correctStateSpec state hcorrect
 simp [KrivineState.correct, evalKrivineMachine.getCorrectState]
 match state with
 | KrivineState.mk code env stack =>
-  match code, env, stack with
-  | KrivineInstruction.Access 0, (KrivineClosure.pair code recEnv :: closures), stack => 
-    simp [KrivineState.correct] at hcorrect
-    -- set_option trace.Meta.Simp.simp true in
-    simp [evalKrivineMachine, Option.get!]
-    admit
-  | KrivineInstruction.Access n, (KrivineClosure.pair code recEnv :: closures), stack =>
-    simp [KrivineState.correct] at hcorrect
-    simp [evalKrivineMachine, Option.get!]
-    admit
-  | KrivineInstruction.Push c' c, env, stack =>
-    simp [KrivineState.correct] at hcorrect
-    simp [evalKrivineMachine, Option.get!]
-    exact ⟨ (correctness.code.aux₃ hcorrect.1).1, ⟨ hcorrect.2.1, correctness.env.aux₃ (sorry) (sorry) (sorry)⟩⟩ 
-  | KrivineInstruction.Grab code, closures, (KrivineClosure.pair c₀ e₀ :: stack) => 
-    simp [KrivineState.correct] at hcorrect
-    simp [evalKrivineMachine, Option.get!]
-    exact ⟨ correctness.code.aux₄ hcorrect.1, ⟨ correctness.env.aux₃ (sorry) (sorry) (sorry), correctness.env.aux₂ hcorrect.2.2 ⟩ ⟩
-  | _, _, _ => 
-    simp [KrivineState.correct] at hcorrect
-    simp [evalKrivineMachine, Option.get!]
-    admit
+  match code with
+  | KrivineInstruction.Access 0 =>
+    match env, stack with
+    | (KrivineClosure.pair code recEnv :: closures), stack =>
+      simp [KrivineState.correct] at hcorrect
+      have evalKrivineMachine { code := KrivineInstruction.Access 0, env := KrivineClosure.pair code recEnv :: closures, stack := stack } = some { code := code, env := recEnv, stack := stack} from by rfl
+      simp [this, Option.get!]
+      exact ⟨ (correctness.code.aux₁ _ _ _ _), ⟨ correctness.env.aux₁ _, hcorrect.2.2 ⟩ ⟩
+  | KrivineInstruction.Access (Nat.succ n) =>
+    match env, stack with
+    | (KrivineClosure.pair code recEnv :: closures), stack =>
+      simp [KrivineState.correct] at hcorrect
+      simp [evalKrivineMachine, Option.get!]
+      exact ⟨ (correctness.code.aux₂ _ _ hcorrect.1 _), ⟨ correctness.env.aux₃ _, hcorrect.2.2 ⟩ ⟩
+  | KrivineInstruction.Push c' c =>
+    match env, stack with
+    | env, stack =>
+      simp [KrivineState.correct] at hcorrect
+      simp [evalKrivineMachine, Option.get!]
+      exact ⟨ (correctness.code.aux₃ hcorrect.1).1, ⟨ hcorrect.2.1, correctness.env.aux₃ _ _ _⟩⟩
+  | KrivineInstruction.Grab code =>
+    match env, stack with
+    | closures, (KrivineClosure.pair c₀ e₀ :: stack) =>
+      simp [KrivineState.correct] at hcorrect
+      simp [evalKrivineMachine, Option.get!]
+      exact ⟨ correctness.code.aux₄ hcorrect.1, ⟨ correctness.env.aux₃ _ _ _, correctness.env.aux₂ hcorrect.2.2 ⟩ ⟩
+    | env, [] =>
+      simp [KrivineState.correct] at hcorrect
+      simp [evalKrivineMachine, Option.get!]
+      have evalKrivineMachine { code := KrivineInstruction.Grab code, env := env, stack := [] } = none from by rfl
+      exact absurd this (evalKrivineMachine.correctStateSpec _ _)
+
 
 -- Q5.4
 
