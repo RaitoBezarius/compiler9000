@@ -123,7 +123,7 @@ fun n => by induction n with
     | LambdaTerm.lambda (body := fn) => exact allFreeVariablesBoundBy.auxRec _ _ _ ih
 
 -- Q1.3
-def substitute (t: LambdaTerm) (index: Nat) (expr: LambdaTerm): LambdaTerm := 
+def substitute (t: LambdaTerm) (index: Nat) (expr: LambdaTerm): LambdaTerm :=
   aux index t 0
 where
   aux i t depth : LambdaTerm := match t with
@@ -376,7 +376,7 @@ fun h_red => by induction h_red with
   assumption
 
 theorem BetaReduction.subterms.reduceAux3 (t u: LambdaTerm):
-  BetaReduction t u -> BetaReduction (LambdaTerm.lambda t) (LambdaTerm.lambda u) := 
+  BetaReduction t u -> BetaReduction (LambdaTerm.lambda t) (LambdaTerm.lambda u) :=
 fun h_red => by induction h_red with
 | Rfl => exact BetaReduction.Rfl _
 | Trans w x y h_smallstep h_step₁ h_step₂ =>
