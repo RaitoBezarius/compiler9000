@@ -41,11 +41,11 @@
         "temci": "temci"
       },
       "locked": {
-        "lastModified": 1620220110,
-        "narHash": "sha256-HUmQA9wCrjn0QXQG6tCYirKwFndqd2s8poI9HzZLAOE=",
+        "lastModified": 1620525852,
+        "narHash": "sha256-XemL3jXZMj8cBK5gI+RTPQwkG5kbg0E5e2oyZ1qfMGg=",
         "owner": "leanprover",
         "repo": "lean4",
-        "rev": "84d3896ea79b28d0d79b597871dc396c0635c33b",
+        "rev": "89373bd64fb5c69126f325407de1a4f609decce6",
         "type": "github"
       },
       "original": {
