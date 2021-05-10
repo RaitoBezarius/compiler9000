@@ -43,14 +43,16 @@ rw [ifNeg hbc]; exact Nat.ltTrans hac (Nat.gtOfNotLe hbc)
 
 theorem Nat.succMaxEqMaxSucc {a b: Nat}: Nat.succ (Nat.max a b) = Nat.max (Nat.succ a) (Nat.succ b) :=
 by
-simp [Nat.max];
-byCases hab: a ≤ b
-byCases hsucc: succ a ≤ succ b
-rw [ifPos hab, ifPos hsucc]
-admit -- a ≤ b ; b + 1 < a + 1 ; b < a ; a ≤ b < a
-byCases hsucc: succ a ≤ succ b
-admit -- b < a ; a + 1 ≤ b + 1 ; a ≤ b ; b < a ≤ b
-rw [ifNeg hab, ifNeg hsucc]
+  simp [Nat.max];
+  byCases hab: a ≤ b
+  focus
+    byCases hsucc: succ a ≤ succ b
+    rw [ifPos hab, ifPos hsucc]
+    rw [ifNeg hsucc, ifNeg <| show ¬ a ≤ b from λ h => hsucc <| succLeSucc h]
+  focus
+    byCases hsucc: succ a ≤ succ b
+    rw [ifPos hsucc, ifPos <| leOfSuccLeSucc hsucc]
+    rw [ifNeg hab, ifNeg hsucc]
 
 theorem Nat.ltSuccMaxLeft {a b: Nat}: a < Nat.succ (Nat.max a b) :=
 by rw [succMaxEqMaxSucc]; exact ltMaxLeft (lt.base _)
@@ -320,9 +322,13 @@ by
         | Or.inl p =>
           apply Or.inl
           simp [List.enumFrom, batchSubstitute.find, hm']
-          exact (show j + i + 1 = 1 + j + i from sorry) ▸ p
+          exact (show j + i + 1 = 1 + j + i by rw [Nat.add_comm, Nat.add_assoc]) ▸ p
         | Or.inr p =>
-          exact absurd p.2 (show ¬ m < 1 + j + i from sorry)
+          exact absurd p.2 (show ¬ m < 1 + j + i from λ h => by
+            rw [Nat.add_assoc, Nat.add_comm, Nat.add_one] at h
+            match eqOrLtOfLe (Nat.leOfLtSucc h) with
+            | Or.inl h => exact hm' h.symm
+            | Or.inr h => exact hm h.symm)
   | app fn arg h_fn h_arg =>
     intro i h
     simp [allFreeVariablesBoundBy, batchSubstitute] at h_fn
