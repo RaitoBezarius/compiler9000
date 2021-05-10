@@ -173,6 +173,41 @@ by induction exprs generalizing index with
     by rw [Nat.add_assoc, Nat.add_comm 1 depth]
     simp [batchSubstitute.find, this, h (index + 1)]
 
+theorem batchSubstituteFindPop (index m : Nat) {depth : Nat} (exprs : List LambdaTerm)
+  (h₁ : m < index + exprs.length) (h₂ : index + depth ≤ m) :
+  batchSubstitute.find (List.enumFrom (index + 1) exprs) depth (m + 1) =
+  batchSubstitute.find (List.enumFrom index exprs) depth m :=
+by induction exprs generalizing index with
+| nil =>
+  simp only [List.length_nil, Nat.add_zero] at h₁
+  have p : m < index + depth := Nat.ltAddRight h₁
+  have p' := Nat.ltOfLtOfLe p h₂
+  exact absurd p' <| Nat.ltIrrefl m
+| cons hd tl h_tl =>
+  simp [batchSubstitute.find]
+  byCases h' : (index + depth = m)
+  focus
+    have h'' : index + 1 + depth = m + 1 by rw [Nat.add_assoc, Nat.add_comm 1, ← Nat.add_assoc, h']
+    simp [ifPos h', ifPos h'']
+  focus
+    have h'' : index + 1 + depth ≠ m + 1 by
+      rw [Nat.add_assoc, Nat.add_comm 1, ← Nat.add_assoc]
+      intro h₀
+      simp [Nat.add_one] at h₀
+      apply Nat.noConfusion h₀
+      exact (λ h : index + depth = m => h' h) 
+    simp [ifNeg h', ifNeg h'']
+    apply h_tl (index + 1)
+    focus
+      simp only [List.length_cons, (Nat.add_one _).symm,
+        Nat.add_comm (List.length _) 1, (Nat.add_assoc _ _ _).symm] at h₁
+      exact h₁
+    focus
+      apply Nat.leOfLtSucc
+      rw [Nat.add_assoc, Nat.add_comm 1, ← Nat.add_assoc]
+      apply Nat.succLeSucc
+      exact Nat.succLeOfLt <| Nat.ltOfLeOfNe h₂ h'
+
 theorem batchSubstituteSwap (t : LambdaTerm) (l : List LambdaTerm) (i : Nat) (depth : Nat) :
   batchSubstitute.aux i l t (depth + 1) = batchSubstitute.aux (i + 1) l t depth :=
 by induction t generalizing depth with
@@ -741,17 +776,38 @@ by match state₀ with
   induction code with
   | Access n => match state with
     | [] =>
-      simp [evalKrivineMachine] at eval
-      admit
+      cases n with
+      | zero => simp [evalKrivineMachine] at eval
+      | succ n => simp [evalKrivineMachine] at eval
     | KrivineClosure.pair code recEnv :: closures =>
-      byCases h : n = 0
-      focus
-        rw [h] at eval
+      apply Or.inr
+      cases n with
+      | zero =>
         simp [evalKrivineMachine] at eval
-        admit
-      focus
-        simp [evalKrivineMachine, h] at eval
-        admit
+        apply Option.noConfusion eval
+        intro eval
+        rw [← eval]
+        simp [undo, undoInstruction, batchSubstitute, batchSubstitute.aux, List.enumFrom, batchSubstitute.find]
+        rw [undoClosureSpec]
+        rfl
+      | succ n =>
+        simp [evalKrivineMachine] at eval
+        apply Option.noConfusion eval
+        intro eval
+        rw [← eval]
+        simp [undo, undoInstruction, batchSubstitute, batchSubstitute.aux, List.enumFrom, batchSubstitute.find]
+        suffices p : batchSubstitute.find (List.enumFrom 1 (List.map undoClosure closures)) 0 (Nat.succ n) =
+          batchSubstitute.find (List.enumFrom 0 (List.map undoClosure closures)) 0 n
+        by rw [p]
+        apply batchSubstituteFindPop
+        focus
+          have p := correct.1
+          simp [List.length_cons, undoInstruction, allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux] at p
+          rw [List.lengthMap, Nat.zero_add]
+          apply Nat.lt_of_succ_lt_succ
+          exact p
+        focus
+          exact Nat.zeroLe n
   | Push c' c c'_h c_h =>
     simp [evalKrivineMachine] at eval
     apply Option.noConfusion eval
