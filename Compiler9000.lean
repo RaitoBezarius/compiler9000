@@ -3,6 +3,10 @@ open Classical
 
 -- For Core / standard library?
 def List.forall (p : α → Prop) := List.foldr (λ a b => p a ∧ b) True
+
+theorem List.forallCons (hd : α) (tl : List α) : List.forall p (hd :: tl) ↔ p hd ∧ List.forall p tl :=
+by simp [List.forall, List.foldr]
+
 theorem Option.someOfNotNone {T: Type} (x: Option T): x ≠ none <-> ∃ t: T, x = some t :=
 by
 apply Iff.intro
@@ -58,6 +62,11 @@ theorem Nat.ltSuccMaxLeft {a b: Nat}: a < Nat.succ (Nat.max a b) :=
 by rw [succMaxEqMaxSucc]; exact ltMaxLeft (lt.base _)
 theorem Nat.ltSuccMaxRight {a b: Nat}: b < Nat.succ (Nat.max a b) :=
 by rw [succMaxEqMaxSucc]; exact ltMaxRight (lt.base _)
+
+theorem List.lengthMap (f : α → β) (l : List α) : List.length (List.map f l) = List.length l :=
+by induction l with
+| nil => simp [length, lengthAux]
+| cons hd tl h_tl => simp [map, length_cons, h_tl]
 
 inductive LambdaTerm where
 | var (val : Nat)
@@ -548,6 +557,17 @@ def correct.spec:
   ∀ (x: KrivineEnv), WellFounded.fix depth_wf correctF x = correctF x (fun y correct => WellFounded.fix depth_wf correctF y)
   := WellFounded.fixEq depth_wf correctF
 
+
+-- TODO (Ryan) : Rename this
+theorem suitableInduction {motive : KrivineEnv → Sort}
+  (env : KrivineEnv)
+  (nil : motive [])
+  (cons : ∀ code env tail, motive env → motive tail →
+    motive (KrivineClosure.pair code env :: tail)) : motive env :=
+by
+  -- TODO (Ryan) : Prove this :3
+  admit
+
 end KrivineEnv
 
 def KrivineState.correct (state: KrivineState): Prop :=
@@ -700,14 +720,18 @@ by
   rw [substRotate t h₁ h₂]
   apply SmallStepBetaReduction.Eval
 
-theorem lemma₂ {state : KrivineState} (correct : KrivineState.correct state) :
-  C[0]((undoInstruction state.code)[0 ← List.map undoClosure state.env]) :=
-by
-  admit
-
 theorem closedOfCorrect {env : KrivineEnv} (correct : KrivineEnv.correct env) :
   List.forall (λ t => C[0](t)) (List.map undoClosure env) :=
-by admit
+by induction env using KrivineEnv.suitableInduction with
+| nil => simp [List.map, List.forall, List.foldr]
+| cons code env tail h_env h_tail =>
+  simp [List.map, List.forallCons, h_tail <| correctness.env.aux₂ correct]
+  simp [undoClosureSpec]
+  exact substAllByClosed
+    (by 
+      rw [List.lengthMap undoClosure env]
+      exact correctness.code.aux₁ code env tail correct)
+    (h_env <| correctness.env.aux₁ _ _ _ correct)
 
 theorem simulationCorrectness (state₀ : KrivineState) (state₁ : KrivineState)
  (eval : evalKrivineMachine state₀ = state₁) (correct : KrivineState.correct state₀) :
@@ -748,10 +772,11 @@ by match state₀ with
       simp [KrivineState.correct] at correct
       apply lemma₀
       simp [batchSubstituteSwap]
-      have p₁ : C[0]((undoInstruction code)[0 ← List.map undoClosure recEnv]) := by
-        apply substAllByClosed
-        admit
-        admit
+      have p₁ := substAllByClosed
+        (by
+          rw [List.lengthMap undoClosure recEnv]
+          exact correctness.code.aux₁ _ _ _ correct.2.2)
+        (closedOfCorrect <| correctness.env.aux₁ _ _ _ correct.2.2)
       apply lemma₁ p₁ (closedOfCorrect correct.2.1)
 
 -- Q5.5
