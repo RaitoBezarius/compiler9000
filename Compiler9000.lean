@@ -619,7 +619,9 @@ fun hnnp => match (em p) with
 | Or.inl hp => hp
 | Or.inr hnp => absurd hnp hnnp
 
-theorem evalKrivineMachine.correctStateSpec (state: KrivineState) (hcorrect: KrivineState.correct state): (evalKrivineMachine state) ≠ none :=
+theorem evalKrivineMachine.isTransitionOfCorrect (state: KrivineState) (hcorrect: KrivineState.correct state)
+  (h_grab: (∃ c: KrivineInstruction, state.code = KrivineInstruction.Grab c) -> (List.length state.stack) ≥ 1):
+  (evalKrivineMachine state) ≠ none :=
 byContradiction (fun hcontra =>
   by
   simp at hcontra
@@ -644,12 +646,9 @@ byContradiction (fun hcontra =>
       | closures, (KrivineClosure.pair c₀ e₀ :: stack) =>
         simp [evalKrivineMachine] at this
       | env, [] =>
-        apply absurd (hcorrect.2.2)
-        simp [KrivineEnv.correct.spec]
-        admit
+        simp only [List.length] at h_grab
+        exact h_grab ⟨ code, by rfl ⟩
 )
-
-def evalKrivineMachine.getCorrectState (state: KrivineState) (hcorrect: KrivineState.correct state): KrivineState := (evalKrivineMachine state).get!
 
 theorem correctness.code.aux₁ (code: KrivineInstruction) (env: KrivineEnv)
   (tail: KrivineEnv)
@@ -697,10 +696,11 @@ by
 simp only [KrivineEnv.correct]; rw [KrivineEnv.correct.spec]
 exact ⟨ h_code, ⟨ h_head, h_tail ⟩ ⟩
 
-theorem transitionCorrectness (state: KrivineState) (hcorrect: KrivineState.correct state):
-  KrivineState.correct (evalKrivineMachine.getCorrectState state hcorrect) :=
+theorem transitionCorrectness (state: KrivineState) (hcorrect: KrivineState.correct state)
+  (h_istransition: evalKrivineMachine state ≠ none):
+  KrivineState.correct $ (evalKrivineMachine state).get! :=
 by
-simp [KrivineState.correct, evalKrivineMachine.getCorrectState]
+simp [KrivineState.correct]
 match state with
 | KrivineState.mk code env stack =>
   match code with
@@ -736,7 +736,7 @@ match state with
       simp [KrivineState.correct] at hcorrect
       simp [evalKrivineMachine, Option.get!]
       have evalKrivineMachine { code := KrivineInstruction.Grab code, env := env, stack := [] } = none from by rfl
-      exact absurd this (evalKrivineMachine.correctStateSpec _ hcorrect)
+      exact absurd this h_istransition
 
 
 -- Q5.4
