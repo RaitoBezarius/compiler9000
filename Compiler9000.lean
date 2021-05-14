@@ -195,7 +195,7 @@ by induction exprs generalizing index with
       intro h₀
       simp [Nat.add_one] at h₀
       apply Nat.noConfusion h₀
-      exact (λ h : index + depth = m => h' h) 
+      exact (λ h : index + depth = m => h' h)
     simp [ifNeg h', ifNeg h'']
     apply h_tl (index + 1)
     focus
@@ -370,9 +370,9 @@ by
         | Or.inr p =>
           exact absurd p.2 (show ¬ m < 1 + j + i from λ h => by
             rw [Nat.add_assoc, Nat.add_comm, Nat.add_one] at h
-            match eqOrLtOfLe (Nat.leOfLtSucc h) with
+            match Nat.eqOrLtOfLe (Nat.leOfLtSucc h) with
             | Or.inl h => exact hm' h.symm
-            | Or.inr h => exact hm h.symm)
+            | Or.inr h => exact hm h)
   | app fn arg h_fn h_arg =>
     intro i h
     simp [allFreeVariablesBoundBy, batchSubstitute] at h_fn
@@ -593,15 +593,18 @@ def correct.spec:
   := WellFounded.fixEq depth_wf correctF
 
 
--- TODO (Ryan) : Rename this
-theorem suitableInduction {motive : KrivineEnv → Sort}
+theorem lateralInduction {motive : KrivineEnv → Sort}
   (env : KrivineEnv)
   (nil : motive [])
   (cons : ∀ code env tail, motive env → motive tail →
     motive (KrivineClosure.pair code env :: tail)) : motive env :=
 by
-  -- TODO (Ryan) : Prove this :3
-  admit
+  apply WellFounded.fix depth_wf
+  intros x h_acc
+  match x with
+  | [] => exact nil
+  | KrivineClosure.pair code env :: tail =>
+    exact cons _ _ _ (h_acc _ $ depth_spec₂ _ _ _) (h_acc _ $ depth_spec₁ _ _ _)
 
 end KrivineEnv
 
@@ -627,21 +630,23 @@ byContradiction (fun hcontra =>
     | KrivineInstruction.Access 0 =>
       match env, stack with
       | (KrivineClosure.pair code recEnv :: closures), stack =>
-        exact absurd this ((Option.someOfNotNone _).2 _)
+        simp [evalKrivineMachine] at this
     | KrivineInstruction.Access (Nat.succ n) =>
       match env, stack with
       | (KrivineClosure.pair code recEnv :: closures), stack =>
-        exact absurd this ((Option.someOfNotNone _).2 _)
+        simp [evalKrivineMachine] at this
     | KrivineInstruction.Push c' c =>
       match env, stack with
       | env, stack =>
-        exact absurd this ((Option.someOfNotNone _).2 _)
+        simp [evalKrivineMachine] at this
     | KrivineInstruction.Grab code =>
       match env, stack with
       | closures, (KrivineClosure.pair c₀ e₀ :: stack) =>
-        exact absurd this ((Option.someOfNotNone _).2 _)
+        simp [evalKrivineMachine] at this
       | env, [] =>
-        exact absurd (hcorrect.2.2) _
+        apply absurd (hcorrect.2.2)
+        simp [KrivineEnv.correct.spec]
+        admit
 )
 
 def evalKrivineMachine.getCorrectState (state: KrivineState) (hcorrect: KrivineState.correct state): KrivineState := (evalKrivineMachine state).get!
@@ -654,10 +659,10 @@ simp [KrivineEnv.correct] at h
 rw [KrivineEnv.correct.spec] at h
 exact h.1
 
-theorem correctness.code.aux₂ (m n: Nat) (hnm: n < m):
-  C[m](undoInstruction $ KrivineInstruction.Access (Nat.succ n)) -> C[m](undoInstruction $ KrivineInstruction.Access n) :=
+theorem correctness.code.aux₂ (m n: Nat):
+  C[Nat.succ m](undoInstruction $ KrivineInstruction.Access (Nat.succ n)) -> C[m](undoInstruction $ KrivineInstruction.Access n) :=
 by
-intro h; simp [undoInstruction, allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux, Nat.lt.base]; exact hnm
+intro h; simp [undoInstruction, allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux, Nat.lt.base]; simp [undoInstruction, allFreeVariablesBoundBy, allFreeVariablesBoundBy.aux] at h; exact h
 
 theorem correctness.code.aux₃ {c c': KrivineInstruction} {n: Nat}:
   C[n](undoInstruction $ KrivineInstruction.Push c c') -> C[n](undoInstruction c') ∧ C[n](undoInstruction c) :=
@@ -705,30 +710,33 @@ match state with
       simp [KrivineState.correct] at hcorrect
       have evalKrivineMachine { code := KrivineInstruction.Access 0, env := KrivineClosure.pair code recEnv :: closures, stack := stack } = some { code := code, env := recEnv, stack := stack} from by rfl
       simp [this, Option.get!]
-      exact ⟨ (correctness.code.aux₁ _ _ _ _), ⟨ correctness.env.aux₁ _, hcorrect.2.2 ⟩ ⟩
+      exact ⟨ (correctness.code.aux₁ _ _ closures hcorrect.2.1), ⟨ (correctness.env.aux₁ code recEnv closures hcorrect.2.1), hcorrect.2.2 ⟩ ⟩
   | KrivineInstruction.Access (Nat.succ n) =>
     match env, stack with
     | (KrivineClosure.pair code recEnv :: closures), stack =>
       simp [KrivineState.correct] at hcorrect
       simp [evalKrivineMachine, Option.get!]
-      exact ⟨ (correctness.code.aux₂ _ _ hcorrect.1 _), ⟨ correctness.env.aux₃ _, hcorrect.2.2 ⟩ ⟩
+      exact ⟨ (correctness.code.aux₂ _ _ hcorrect.1), ⟨ correctness.env.aux₂ hcorrect.2.1, hcorrect.2.2 ⟩ ⟩
   | KrivineInstruction.Push c' c =>
     match env, stack with
     | env, stack =>
       simp [KrivineState.correct] at hcorrect
       simp [evalKrivineMachine, Option.get!]
-      exact ⟨ (correctness.code.aux₃ hcorrect.1).1, ⟨ hcorrect.2.1, correctness.env.aux₃ _ _ _⟩⟩
+      have allFreeVariablesBoundBy (List.length env) (undoInstruction c') from (correctness.code.aux₃ hcorrect.1).2
+      exact ⟨ (correctness.code.aux₃ hcorrect.1).1, ⟨ hcorrect.2.1, correctness.env.aux₃ this hcorrect.2.1 hcorrect.2.2⟩⟩
   | KrivineInstruction.Grab code =>
     match env, stack with
     | closures, (KrivineClosure.pair c₀ e₀ :: stack) =>
       simp [KrivineState.correct] at hcorrect
       simp [evalKrivineMachine, Option.get!]
-      exact ⟨ correctness.code.aux₄ hcorrect.1, ⟨ correctness.env.aux₃ _ _ _, correctness.env.aux₂ hcorrect.2.2 ⟩ ⟩
+      have h₁: allFreeVariablesBoundBy (List.length e₀) (undoInstruction c₀) from correctness.code.aux₁ _ _ _ hcorrect.2.2
+      have h₂: KrivineEnv.correct e₀ from correctness.env.aux₁ _ _ _ hcorrect.2.2
+      exact ⟨ correctness.code.aux₄ hcorrect.1, ⟨ correctness.env.aux₃ h₁ h₂ hcorrect.2.1, correctness.env.aux₂ hcorrect.2.2 ⟩ ⟩
     | env, [] =>
       simp [KrivineState.correct] at hcorrect
       simp [evalKrivineMachine, Option.get!]
       have evalKrivineMachine { code := KrivineInstruction.Grab code, env := env, stack := [] } = none from by rfl
-      exact absurd this (evalKrivineMachine.correctStateSpec _ _)
+      exact absurd this (evalKrivineMachine.correctStateSpec _ hcorrect)
 
 
 -- Q5.4
@@ -747,23 +755,21 @@ by induction l generalizing u v with
   simp [List.foldl]
   exact SmallStepBetaReduction.LeftContext _ _ _ h
 
-#print substRotate
-
 theorem lemma₁ (h₁ : C[0](u)) (h₂ : List.forall (λ t => C[0](t)) l) :
   SmallStepBetaReduction (LambdaTerm.app (LambdaTerm.lambda (t[1 ← l])) u) (t[0 ← u :: l]) :=
-by 
+by
   rw [substRotate t h₁ h₂]
   apply SmallStepBetaReduction.Eval
 
 theorem closedOfCorrect {env : KrivineEnv} (correct : KrivineEnv.correct env) :
   List.forall (λ t => C[0](t)) (List.map undoClosure env) :=
-by induction env using KrivineEnv.suitableInduction with
+by induction env using KrivineEnv.lateralInduction with
 | nil => simp [List.map, List.forall, List.foldr]
 | cons code env tail h_env h_tail =>
   simp [List.map, List.forallCons, h_tail <| correctness.env.aux₂ correct]
   simp [undoClosureSpec]
   exact substAllByClosed
-    (by 
+    (by
       rw [List.lengthMap undoClosure env]
       exact correctness.code.aux₁ code env tail correct)
     (h_env <| correctness.env.aux₁ _ _ _ correct)
