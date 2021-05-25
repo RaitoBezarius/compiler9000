@@ -842,4 +842,21 @@ by match state₀ with
       apply lemma₁ p₁ (closedOfCorrect correct.2.1)
 
 -- Q5.5
--- theorem
+inductive EvalTC: KrivineState -> KrivineState -> Prop :=
+| Rfl (u: KrivineState): EvalTC u u
+| Trans (t u v: KrivineState): evalKrivineMachine t = u -> EvalTC u v -> EvalTC t v
+
+theorem simulationCorrectnessTC (u v : KrivineState) (h : EvalTC u v) (correct : KrivineState.correct u) :
+  BetaReduction (undo u) (undo v) :=
+by induction h with
+| Rfl u => apply BetaReduction.Rfl
+| Trans t u v t_h a a_h =>
+  have p := simulationCorrectness t u t_h correct
+  have u_correct := transitionCorrectness t correct (by simp [t_h])
+  rw [t_h] at u_correct
+  match p with
+  | Or.inl p =>
+    exact BetaReduction.Trans (undo t) (undo u) (undo v) p (a_h u_correct)
+  | Or.inr p =>
+    rw [p]
+    exact a_h u_correct
