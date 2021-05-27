@@ -774,6 +774,16 @@ by induction env using KrivineEnv.lateralInduction with
       exact correctness.code.aux₁ code env tail correct)
     (h_env <| correctness.env.aux₁ _ _ _ correct)
 
+
+/-
+Nous avons rencontré un léger problème : nous avons dû modifier la question 5.4
+qui était fausse en l'état (une transition de la machine de Krivine ne correspond
+pas toujours à une beta-reduction -- on le voit par exemple dans les cas où l'instruction
+à exécuter est `Access n` avec n > 0).
+
+Nous avons donc décidé de simplement montrer qu'une transition de la machine de Krivine
+correspond soit à une beta-reduction, soit à aucune opération modulo τ.
+-/
 theorem simulationCorrectness (state₀ : KrivineState) (state₁ : KrivineState)
  (eval : evalKrivineMachine state₀ = state₁) (correct : KrivineState.correct state₀) :
  SmallStepBetaReduction (undo state₀) (undo state₁) ∨ undo state₀ = undo state₁ :=
@@ -846,6 +856,20 @@ inductive EvalTC: KrivineState -> KrivineState -> Prop :=
 | Rfl (u: KrivineState): EvalTC u u
 | Trans (t u v: KrivineState): evalKrivineMachine t = u -> EvalTC u v -> EvalTC t v
 
+
+/-
+Le vrai problème se pose à la dernière question : nous n'avons pas assez de lemmes pour
+montrer un théorème de correction vraiment puissant. En l'état, nous avons simplement
+montré qu'une chaîne de transitions de la machine de Krivine correspond à une chaîne
+de beta-reductions, c'est à dire une version itérée de 5.4.
+
+Nous aurions pu montrer un théorème plus puissant en renforçant des lemmes précédents.
+Le mieux aurait été de montrer que pour tout état `s` correct, s'il existe une transition
+de la machine de Krivine partant de `s`, alors il existe une chaîne de transitions
+`s = s₀ -> s₁ -> ... -> sₙ` telle que `τ(s₀) -> τ(sₙ)`. Ceci nous aurait permis d'exhiber
+une équivalence entre les exécutions du modèle du lambda calcul que l'on a dans le sujet
+et les exécutions de la machine de Krivine.
+-/
 theorem simulationCorrectnessTC (u v : KrivineState) (h : EvalTC u v) (correct : KrivineState.correct u) :
   BetaReduction (undo u) (undo v) :=
 by induction h with
